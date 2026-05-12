@@ -689,6 +689,10 @@ textarea{resize:vertical;min-height:60px}
       </div>
       <button class="btn btn-o" onclick="document.getElementById('sum-date').value='';renderSummary()" style="height:36px;align-self:flex-end">Clear date</button>
       <button class="btn btn-p" onclick="exportSummaryExcel()" style="height:36px;align-self:flex-end">&#8595; Export to Excel</button>
+      <button class="btn btn-o" onclick="exportSummarySheets()" style="height:36px;align-self:flex-end;display:flex;align-items:center;gap:6px">
+        <svg width="14" height="14" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 27h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg>
+        Save to Google Sheets
+      </button>
       <button class="btn btn-o" onclick="window.print()" style="height:36px;align-self:flex-end">&#128438; Print</button>
     </div>
 
@@ -2752,6 +2756,7 @@ function renderSummary(){
       '<th class="num" style="width:96px">Unit price</th>'+
       '<th class="num" style="width:60px">Qty</th>'+
       '<th class="num" style="width:96px">Subtotal</th>'+
+      '<th style="width:100px;text-align:center">Collected</th>'+
     '</tr></thead><tbody>';
 
   var grandTotal=0;
@@ -2760,6 +2765,8 @@ function renderSummary(){
     var c=cp(m.cid);
     var cname=c?c.name:'Unknown';
     var blockTotal=0;
+    var isPaid=m.status==='paid';
+    var rowBg=isPaid?'background:#f0fdf4;':'';
 
     m.items.forEach(function(it){
       var p=sp(it.s);
@@ -2768,20 +2775,25 @@ function renderSummary(){
       var sub=sell*it.q;
       blockTotal+=sub;
       html+=
-        '<tr>'+
+        '<tr style="'+rowBg+'">'+
           '<td style="color:#555">'+esc(cname)+'</td>'+
           '<td>'+esc(p.name)+'</td>'+
           '<td class="num">'+sell.toFixed(2)+'</td>'+
-          '<td class="num">'+it.q+'</td>'+
+          '<td class="num">'+parseFloat(it.q).toFixed(2)+'</td>'+
           '<td class="num">'+sub.toFixed(2)+'</td>'+
+          '<td></td>'+
         '</tr>';
     });
 
     grandTotal+=blockTotal;
+    var tickBtn=isPaid
+      ?'<button onclick="sumTogglePaid('+m.cid+',\''+m.date+'\')" style="padding:5px 12px;font-size:12px;font-weight:700;border:none;border-radius:6px;background:#16a34a;color:#fff;cursor:pointer">✓ Paid</button>'
+      :'<button onclick="sumTogglePaid('+m.cid+',\''+m.date+'\')" style="padding:5px 12px;font-size:12px;font-weight:600;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#555;cursor:pointer">Mark paid</button>';
     html+=
-      '<tr class="subtotal-row">'+
-        '<td colspan="4" style="text-align:right;padding-right:14px;color:#555">'+esc(cname)+' total</td>'+
-        '<td class="num">'+blockTotal.toFixed(2)+'</td>'+
+      '<tr class="subtotal-row" style="'+rowBg+'">'+ 
+        '<td colspan="4" style="text-align:right;padding-right:14px;font-weight:700;color:#1a1a1a">'+esc(cname)+' total</td>'+
+        '<td class="num" style="font-weight:700">'+blockTotal.toFixed(2)+'</td>'+
+        '<td style="text-align:center;padding:6px 8px">'+tickBtn+'</td>'+
       '</tr>';
   });
 
@@ -2789,6 +2801,7 @@ function renderSummary(){
     '<tr class="total-row">'+
       '<td colspan="4" style="text-align:right;padding-right:14px">Grand Total</td>'+
       '<td class="num">'+grandTotal.toFixed(2)+'</td>'+
+      '<td></td>'+
     '</tr>';
 
   html+='</tbody></table>';
@@ -2846,7 +2859,7 @@ function exportSummaryExcel(){
         if(entry&&entry.remark) remark=entry.remark;
       });
 
-      ws_data.push([cname,p.name,parseFloat(sell.toFixed(2)),it.q,sub,remark,m.date,m.status]);
+      ws_data.push([cname,p.name,parseFloat(sell.toFixed(2)),parseFloat(it.q.toFixed(2)),sub,remark,m.date,m.status]);
       rowMeta.push('item');
     });
 
@@ -2872,9 +2885,9 @@ function exportSummaryExcel(){
   ws['!cols']=[{wch:18},{wch:28},{wch:14},{wch:8},{wch:14},{wch:20},{wch:12},{wch:10}];
 
   /* styling */
-  var headerFill={fgColor:{rgb:'D9E1F2'}};
-  var totalFill={fgColor:{rgb:'EEF2F7'}};
-  var grandFill={fgColor:{rgb:'1E3A5F'}};
+  var headerFill={patternType:'solid',fgColor:{rgb:'D9E1F2'}};
+  var totalFill={patternType:'solid',fgColor:{rgb:'C6EFCE'}};/* green — matches Sheets */
+  var grandFill={patternType:'solid',fgColor:{rgb:'1E3A5F'}};
   var cols=['A','B','C','D','E','F','G','H'];
 
   rowMeta.forEach(function(type,ri){
@@ -2897,10 +2910,96 @@ function exportSummaryExcel(){
   XLSX.utils.book_append_sheet(wb,ws,'Order Summary');
   var today=new Date().toISOString().split('T')[0];
   XLSX.writeFile(wb,'order-summary-'+today+'.xlsx');
-  toast('Summary exported \u2713');
+  toast('Summary exported ✓');
 }
 
-/* ── DELIVERY RUNS ── */
+function sumTogglePaid(cid,date){
+  var orders=D.orders.filter(function(o){return o.cid===cid&&o.date===date;});
+  var allPaid=orders.every(function(o){return o.status==='paid';});
+  orders.forEach(function(o){o.status=allPaid?'unpaid':'paid';});
+  saveData();renderSummary();renderDash();
+  toast(allPaid?'Marked unpaid':'✓ Marked as paid');
+}
+
+function exportSummarySheets(){
+  if(!GD.accessToken){toast('Connect Google Drive first.');return;}
+  if(typeof XLSX==='undefined'){toast('Loading library...');return;}
+  var ords=getSummaryOrders();
+  if(!ords.length){toast('No orders to export.');return;}
+  toast('Creating Google Sheet...');
+  var mergedMap={};
+  ords.forEach(function(o){
+    var key=o.cid+'|'+o.date;
+    if(!mergedMap[key])mergedMap[key]={cid:o.cid,date:o.date,items:[],status:o.status};
+    o.items.forEach(function(it){
+      var ex=mergedMap[key].items.find(function(x){return x.s===it.s&&(x.sp||0)===(it.sp||0);});
+      if(ex){ex.q=parseFloat((ex.q+it.q).toFixed(2));}else{mergedMap[key].items.push({s:it.s,q:it.q,sp:it.sp,cp:it.cp});}
+    });
+  });
+  var merged=Object.values(mergedMap).sort(function(a,b){var na=(cp(a.cid)||{name:''}).name;var nb=(cp(b.cid)||{name:''}).name;return na.localeCompare(nb)||a.date.localeCompare(b.date);});
+  var rows=[['Order by','Product','Unit price (A$)','Qty','Subtotal (A$)','Order date','Status']];
+  var headerRowIdxs=[0];var totalRowIdxs=[];var grandTotal=0;
+  merged.forEach(function(m,bi){
+    var c=cp(m.cid);var cname=c?c.name:'Unknown';var blockTotal=0;
+    headerRowIdxs.push(rows.length);
+    rows.push(['Order by','Product','Unit price (A$)','Qty','Subtotal (A$)','Order date','Status']);
+    m.items.forEach(function(it){
+      var p=sp(it.s);if(!p)return;
+      var sell=parseFloat((it.sp!=null?it.sp:p.sell).toFixed(2));
+      var qty=parseFloat(it.q.toFixed(2));
+      var sub=parseFloat((sell*qty).toFixed(2));
+      blockTotal+=sub;
+      rows.push([cname,p.name,sell,qty,sub,m.date,m.status]);
+    });
+    grandTotal=parseFloat((grandTotal+blockTotal).toFixed(2));
+    totalRowIdxs.push(rows.length);
+    rows.push([cname+' Total','','','',parseFloat(blockTotal.toFixed(2)),'','']);
+    if(bi<merged.length-1)rows.push(['','','','','','','']);
+  });
+  rows.push(['','','','','','','']);
+  rows.push(['GRAND TOTAL','','','',grandTotal,'','']);
+  var grandIdx=rows.length-1;
+  var today=new Date().toISOString().split('T')[0];
+  fetch('https://sheets.googleapis.com/v4/spreadsheets',{
+    method:'POST',
+    headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'application/json'},
+    body:JSON.stringify({properties:{title:'Order Summary '+today},sheets:[{properties:{title:'Order Summary'}}]})
+  }).then(function(r){return r.json();}).then(function(sheet){
+    if(sheet.error){toast('Sheets error: '+sheet.error.message);return;}
+    var sid=sheet.spreadsheetId;
+    var shid=sheet.sheets[0].properties.sheetId;
+    return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/A1:G'+rows.length+'?valueInputOption=USER_ENTERED',{
+      method:'PUT',headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'application/json'},
+      body:JSON.stringify({values:rows})
+    }).then(function(){
+      var reqs=[];
+      /* bold blue headers */
+      headerRowIdxs.forEach(function(ri){
+        reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:ri,endRowIndex:ri+1,startColumnIndex:0,endColumnIndex:7},
+          cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.85,green:0.89,blue:0.95}}},fields:'userEnteredFormat(textFormat,backgroundColor)'}});
+      });
+      /* bold green totals */
+      totalRowIdxs.forEach(function(ri){
+        reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:ri,endRowIndex:ri+1,startColumnIndex:0,endColumnIndex:7},
+          cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.77,green:0.94,blue:0.80}}},fields:'userEnteredFormat(textFormat,backgroundColor)'}});
+      });
+      /* bold white grand total */
+      reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:grandIdx,endRowIndex:grandIdx+1,startColumnIndex:0,endColumnIndex:7},
+        cell:{userEnteredFormat:{textFormat:{bold:true,foregroundColor:{red:1,green:1,blue:1}},backgroundColor:{red:0.12,green:0.23,blue:0.37}}},fields:'userEnteredFormat(textFormat,backgroundColor)'}});
+      /* auto resize */
+      reqs.push({autoResizeDimensions:{dimensions:{sheetId:shid,dimension:'COLUMNS',startIndex:0,endIndex:7}}});
+      return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid+':batchUpdate',{
+        method:'POST',headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'application/json'},
+        body:JSON.stringify({requests:reqs})
+      });
+    }).then(function(){
+      toast('✓ Saved to Google Sheets');
+      window.open('https://docs.google.com/spreadsheets/d/'+sid,'_blank');
+    });
+  }).catch(function(err){toast('Error: '+err.message);});
+}
+
+
 /* ████████████████████████████████████████████████
    SECTION 9 — DELIVERY RUNS (TAB 7)
    • createRun, deleteRun, renderRunSelector
@@ -3414,7 +3513,7 @@ renderDash();
    ████████████████████████████████████████████████ */
 var GD = {
   CLIENT_ID: '',
-  SCOPES: 'https://www.googleapis.com/auth/drive.appdata',
+  SCOPES: 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/spreadsheets',
   FILE_NAME: 'order-manager-backup.json',
   tokenClient: null,
   accessToken: null,
