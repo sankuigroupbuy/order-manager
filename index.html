@@ -748,7 +748,29 @@ textarea{resize:vertical;min-height:60px}
 <div class="toast" id="toast"></div>
 
 <script>
-/* ── STORAGE ── */
+/* ╔══════════════════════════════════════════════════╗
+   ║         ORDER MANAGER — CODE MAP                 ║
+   ╠══════════════════════════════════════════════════╣
+   ║  SECTION 1  — Storage & Data          line ~760  ║
+   ║  SECTION 2  — Navigation              line ~870  ║
+   ║  SECTION 3  — Customer Receipt        line ~900  ║
+   ║  SECTION 4  — Internal Tracker        line ~1220 ║
+   ║  SECTION 5  — Stock List              line ~2150 ║
+   ║  SECTION 6  — Customers               line ~2260 ║
+   ║  SECTION 7  — Reports                 line ~2390 ║
+   ║  SECTION 8  — Order Summary           line ~2660 ║
+   ║  SECTION 9  — Delivery Runs           line ~2870 ║
+   ║  SECTION 10 — Import / Export         line ~3210 ║
+   ║  SECTION 11 — Google Drive Sync       line ~3285 ║
+   ║  SECTION 12 — Security / Password     line ~3635 ║
+   ║  SECTION 13 — Insights                line ~3770 ║
+   ║  SECTION 14 — Mobile UI               line ~4050 ║
+   ╚══════════════════════════════════════════════════╝ */
+/* ████████████████████████████████████████████████
+   SECTION 1 — STORAGE & DATA
+   • KEYS, DEFAULT, loadData, saveData
+   • D (data object), utility helpers (rm, sp, cp, etc.)
+   ████████████████████████████████████████████████ */
 var KEYS = {customers:'om_customers',stock:'om_stock',orders:'om_orders',nid:'om_nid',priceLog:'om_pricelog',runs:'om_runs'};
 
 var DEFAULT = {
@@ -863,6 +885,10 @@ function ini(n){return n.split(' ').slice(0,2).map(function(w){return w[0]}).joi
 function bc(st){return st==='paid'?'bp':st==='partial'?'bpa':'bu'}
 function esc(s){return String(s||'').replace(/&/g,'&'+'amp;').replace(/</g,'&'+'lt;').replace(/>/g,'&'+'gt;').replace(/"/g,'&'+'quot;')}
 
+/* ████████████████████████████████████████████████
+   SECTION 2 — NAVIGATION & TAB SWITCHING
+   • show(), toggleTopbarMenu()
+   ████████████████████████████████████████████████ */
 function show(tab){
   document.querySelectorAll('.tab').forEach(function(b,i){b.classList.toggle('active',['receipt','internal','stock','customers','reports','summary','delivery','insights'][i]===tab)});
   document.querySelectorAll('.sec').forEach(function(s){s.classList.remove('active')});
@@ -893,6 +919,10 @@ document.addEventListener('click',function(e){
 });
 
 /* ── TAB 1: RECEIPT DASHBOARD ── */
+/* ████████████████████████████████████████████████
+   SECTION 3 — CUSTOMER RECEIPT (TAB 1)
+   • renderDash, setDashFilter, markCustPaid, openDet
+   ████████████████████████████████████████████████ */
 var dashFilter='all';
 var dashExpanded={};
 
@@ -1211,6 +1241,14 @@ function openDet(cid){
 function backDash(){document.getElementById('det-view').style.display='none';document.getElementById('dash-view').style.display='block'}
 
 /* ── TAB 2: INTERNAL TRACKER ── */
+/* ████████████████████████████████████████████████
+   SECTION 4 — INTERNAL TRACKER (TAB 2)
+   • renderIntM, renderInt, populateMonthFilter
+   • togPaid, togPaidGroup, delOrd
+   • popCust, initOForm, saveOrder (add order form)
+   • openAmend, saveAmend, renderAL (amend order)
+   • WhatsApp importer: parseWA, fuzzyMatchCust, fuzzyMatchStock
+   ████████████████████████████████████████████████ */
 function renderIntM(){
   var rev=D.orders.reduce(function(s,o){return s+oSell(o)},0);
   var cost=D.orders.reduce(function(s,o){return s+oCost(o)},0);
@@ -2132,6 +2170,10 @@ function confirmImport(){
   setTimeout(function(){clearImportPreview();toggleImport();document.getElementById('imp-msg').textContent=''},1600);
 }
 
+/* ████████████████████████████████████████████████
+   SECTION 5 — STOCK LIST (TAB 3)
+   • renderStk, addStock, amendStk, saveStk, removeStk
+   ████████████████████████████████████████████████ */
 function renderStk(){
   var tb=document.getElementById('stk-body');
   if(!D.stock.length){tb.innerHTML='<tr><td colspan="7" class="empty">No items yet.</td></tr>';return}
@@ -2229,6 +2271,11 @@ function delStk(id){
 }
 
 /* ── TAB 4: CUSTOMERS ── */
+/* ████████████████████████████████████████████████
+   SECTION 6 — CUSTOMERS (TAB 4)
+   • toggleAddForm, renderCustList, showProfile
+   • editProfile, saveProfile, deleteCustomer
+   ████████████████████████████████████████████████ */
 function toggleAddForm(){
   var w=document.getElementById('add-form-wrap');
   w.style.display=w.style.display==='none'?'block':'none';
@@ -2373,6 +2420,12 @@ function togPaidRefresh(oid,cid){
 }
 
 /* ── EXPORT TO EXCEL ── */
+/* ████████████████████████████████████████████████
+   SECTION 7 — REPORTS (TAB 5)
+   • renderReports, renderRptMetrics, renderMonthlyChart
+   • renderSellersChart, renderBatchSummary, renderPriceHistory
+   • exportExcel, clearRptFilter
+   ████████████████████████████████████████████████ */
 function exportExcel(){
   if(typeof XLSX==='undefined'){toast('Loading Excel library...');return}
 
@@ -2639,6 +2692,10 @@ function destroyChart(key){
 
 
 /* ── ORDER SUMMARY TAB ── */
+/* ████████████████████████████████████████████████
+   SECTION 8 — ORDER SUMMARY (TAB 6)
+   • getSummaryOrders, renderSummary, exportSummaryExcel
+   ████████████████████████████████████████████████ */
 function getSummaryOrders(){
   var sv=document.getElementById('sum-status').value;
   var sd=document.getElementById('sum-date').value;
@@ -2856,6 +2913,13 @@ function exportSummaryExcel(){
 }
 
 /* ── DELIVERY RUNS ── */
+/* ████████████████████████████████████████████████
+   SECTION 9 — DELIVERY RUNS (TAB 7)
+   • createRun, deleteRun, renderRunSelector
+   • renderDelivery, renderDeliveryBoard
+   • setDispStatus, saveRemark, toggleDvRow
+   • setDvView, setBoardSt
+   ████████████████████████████████████████████████ */
 function createRun(){
   var date=document.getElementById('dv-new-date').value;
   var note=document.getElementById('dv-new-note').value.trim();
@@ -3199,6 +3263,10 @@ function setBoardSt(runId,cid,status){
   if(dvView==='list') renderDelivery();
 }
 
+/* ████████████████████████████████████████████████
+   SECTION 10 — IMPORT / EXPORT (JSON)
+   • exportJSON, importJSON
+   ████████████████████████████████████████████████ */
 function exportJSON(){
   var payload={
     version:1,
@@ -3269,6 +3337,12 @@ renderDash();
    GOOGLE DRIVE SYNC
    ════════════════════════════════════════════════════ */
 
+/* ████████████████████████████████████████████████
+   SECTION 11 — GOOGLE DRIVE SYNC
+   • GD config, gdLoadConfig, gdSaveConfig
+   • gdConnect, gdDisconnect, gdSave, gdLoad
+   • gdGetFileId, gdShowSetup, gdInitGapi/Gis
+   ████████████████████████████████████████████████ */
 var GD = {
   CLIENT_ID: '',
   SCOPES: 'https://www.googleapis.com/auth/drive.appdata',
@@ -3620,6 +3694,19 @@ window.gisLoaded=function(){ gdInitGis(); };
    1. Run lkHash('yournewpassword') in browser console
    2. Replace LK_HASH below with the result
    ════════════════════════════════════════ */
+/* ████████████████████████████████████████████████
+   SECTION 12 — SECURITY (PASSWORD + AUTO-LOCK)
+   • LK_HASH (hardcoded shared password hash)
+   • EMAILJS config (login notifications)
+   • lkInit, lkSubmit, lkUnlock, lkLock
+   • lkResetIdle, lkNotify, lkChangePw
+   ─────────────────────────────────────────────────
+   TO CHANGE PASSWORD:
+   1. Open browser console on the live app
+   2. Type: lkHash('yournewpassword')  → copy the result
+   3. Replace LK_HASH value below with the result
+   4. Upload to GitHub
+   ████████████████████████████████████████████████ */
 var LK_HASH='onlhj1r667a'; /* hash of NMC123456! */
 
 /* EmailJS config — fill in after EmailJS setup */
@@ -3752,6 +3839,14 @@ function lkSavePw(){
 /* ════════════════════════════════════════
    INSIGHTS TAB
    ════════════════════════════════════════ */
+/* ████████████████████████████████████████████████
+   SECTION 13 — INSIGHTS (TAB 8)
+   • renderInsights — charts, KPIs, at-risk table
+   • Profit Focus panel (heroes/stars/workhorses/reconsider)
+   • Next Run Planner (AI via Anthropic API)
+   • iKpi, iMini, iLoyalty helpers
+   • runPlanner, copyPlannerText
+   ████████████████████████████████████████████████ */
 var insightsCharts=[];
 function renderInsights(){
   var wrap=document.getElementById('insights-wrap');
@@ -4025,6 +4120,16 @@ function copyPlannerText(){
 /* ════════════════════════════════════════
    MOBILE RENDER FUNCTIONS
    ════════════════════════════════════════ */
+/* ████████████████████████████████████████████████
+   SECTION 14 — MOBILE UI
+   • isMob() — screen width check
+   • renderMobReceipt — customer cards for mobile
+   • renderMobTracker — order cards for mobile
+   • renderMobDelivery — delivery cards + load sheet
+   • renderMobInsights — bar charts + at-risk list
+   • setDvStatus — confirm/delay/skip on mobile
+   • injectMobContainers — creates mobile div slots
+   ████████████████████████████████████████████████ */
 function isMob(){return window.innerWidth<=768;}
 
 /* ── Mobile Receipt ── */
