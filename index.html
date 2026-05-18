@@ -2209,7 +2209,7 @@ function renderStk(){
         '<th style="width:96px">Cost(A$)</th>'+
         '<th style="width:96px">Sell(A$)</th>'+
         '<th style="width:76px">Margin</th>'+
-        '<th style="width:180px;white-space:nowrap">Action</th>'+
+        '<th style="width:240px;white-space:nowrap">Action</th>'+
       '</tr></thead><tbody>';
     prods.forEach(function(p){
       var m=p.sell>0?((p.sell-p.cost)/p.sell*100):0;
@@ -2254,9 +2254,9 @@ function amendStk(id){
     return'<option value="'+c+'"'+(( p.cat||'Others')===c?' selected':'')+'>'+STK_CAT_ICONS[c]+' '+c+'</option>';
   }).join('');
   document.getElementById('stk-act-'+id).innerHTML=
-    '<select id="se-cat-'+id+'" style="font-size:11px;padding:3px 6px;border:1px solid #bfdbfe;border-radius:5px;margin-right:4px">'+catOptions+'</select>'+
-    '<button class="btn btn-sm btn-g" style="margin-right:4px" onclick="saveStk('+id+')">Save</button>'+
-    '<button class="btn btn-sm btn-o" onclick="renderStk()">Cancel</button>';
+    '<select id="se-cat-'+id+'" style="font-size:11px;padding:3px 5px;border:1px solid #bfdbfe;border-radius:5px;margin-right:3px;max-width:110px">'+catOptions+'</select>'+
+    '<button class="btn btn-sm btn-g" style="margin-right:3px;padding:4px 8px;font-size:11px" onclick="saveStk('+id+')">Save</button>'+
+    '<button class="btn btn-sm btn-o" style="padding:4px 8px;font-size:11px" onclick="renderStk()">Cancel</button>';
   document.getElementById('se-cost-'+id).focus();
 }
 
