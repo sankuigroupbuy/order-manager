@@ -554,23 +554,28 @@ textarea{resize:vertical;min-height:60px}
         <div><label>Cost (A$)</label><input type="number" id="s-cost" step="0.01" placeholder="0.00"></div>
         <div><label>Sell price (A$)</label><input type="number" id="s-sell" step="0.01" placeholder="0.00"></div>
       </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <div><label>Category</label>
+          <select id="s-cat" style="font-size:13px;padding:6px 10px;border:1px solid #e0e0e0;border-radius:8px">
+            <option value="Others">📦 Others</option>
+            <option value="Meat">🥩 Meat</option>
+            <option value="Fish">🐟 Fish</option>
+            <option value="Seafood">🦐 Seafood</option>
+            <option value="Hills Sweets NMC">🍰 Hills Sweets NMC</option>
+          </select>
+        </div>
+      </div>
       <button class="btn btn-p" onclick="addStock()">Add to stock</button>
       <span id="s-msg" style="font-size:12px;color:#16a34a;margin-left:12px"></span>
     </div>
-    <div class="sec-label">Current stock</div>
-    <div class="card" style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-      <table style="min-width:580px;table-layout:auto">
-        <thead><tr>
-          <th>Item <span style="font-size:10px;color:#bbb;font-weight:400;letter-spacing:0">&#128274;</span></th>
-          <th style="width:70px">Unit</th>
-          <th style="width:96px">Cost(A$)</th>
-          <th style="width:96px">Sell(A$)</th>
-          <th style="width:76px">Margin</th>
-          <th style="width:150px;white-space:nowrap">Action</th>
-        </tr></thead>
-        <tbody id="stk-body"></tbody>
-      </table>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="sec-label" style="margin:0">Current stock</div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#888;cursor:pointer">
+        <input type="checkbox" id="stk-show-archived" onchange="renderStk()" style="cursor:pointer">
+        Show archived
+      </label>
     </div>
+    <div id="stk-grouped"></div>
   </div>
 
   <!-- TAB 4 -->
@@ -1442,7 +1447,7 @@ function renderOL(){
     var sub=l.s?rm(sp(parseInt(l.s)).sell*l.q):'—';
     return'<div class="pline">'+
       '<div><label>Item</label><select onchange="updLine('+i+',\'s\',this.value)"><option value="">Select...</option>'+
-        D.stock.map(function(p){return'<option value="'+p.id+'"'+(l.s==p.id?' selected':'')+'>'+esc(p.name)+' — '+rm(p.sell)+'</option>'}).join('')+
+        D.stock.filter(function(p){return !p.archived;}).map(function(p){return'<option value="'+p.id+'"'+(l.s==p.id?' selected':'')+'>'+esc(p.name)+' — '+rm(p.sell)+'</option>'}).join('')+
       '</select></div>'+
       '<div><label>Qty</label><input type="number" min="0.01" step="0.01" value="'+l.q+'" onchange="updLine('+i+',\'q\',this.value)"></div>'+
       '<div><label>Subtotal</label><input readonly value="'+sub+'"></div>'+
@@ -1558,7 +1563,7 @@ function renderAL(){
       :'<span style="font-size:11px;color:#aaa">—</span>';
     return'<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;align-items:flex-end;margin-bottom:8px">'+
       '<div><label>Item</label><select onchange="updALine('+i+',\'s\',this.value)"><option value="">Select...</option>'+
-        D.stock.map(function(p2){return'<option value="'+p2.id+'"'+(l.s==p2.id?' selected':'')+'>'+esc(p2.name)+' — '+rm(p2.sell)+'</option>'}).join('')+
+        D.stock.filter(function(p2){return !p2.archived;}).map(function(p2){return'<option value="'+p2.id+'"'+(l.s==p2.id?' selected':'')+'>'+esc(p2.name)+' — '+rm(p2.sell)+'</option>'}).join('')+
       '</select></div>'+
       '<div><label>Qty</label><input type="number" min="0.01" step="0.01" value="'+l.q+'" onchange="updALine('+i+',\'q\',this.value)"></div>'+
       '<div>'+
@@ -2166,28 +2171,70 @@ function confirmImport(){
    SECTION 5 — STOCK LIST (TAB 3)
    • renderStk, addStock, amendStk, saveStk, removeStk
    ████████████████████████████████████████████████ */
+var STK_CATS=['Meat','Fish','Seafood','Hills Sweets NMC','Others'];
+var STK_CAT_ICONS={Meat:'🥩',Fish:'🐟',Seafood:'🦐','Hills Sweets NMC':'🍰',Others:'📦'};
+
 function renderStk(){
-  var tb=document.getElementById('stk-body');
-  if(!D.stock.length){tb.innerHTML='<tr><td colspan="7" class="empty">No items yet.</td></tr>';return}
-  tb.innerHTML=D.stock.map(function(p){
-    var m=p.sell>0?((p.sell-p.cost)/p.sell*100):0;
-    return'<tr id="stk-row-'+p.id+'">'+
-      '<td id="stk-name-'+p.id+'" style="font-weight:600">'+esc(p.name)+'</td>'+
-      '<td id="stk-unit-'+p.id+'" style="color:#888">'+(p.unit||'—')+'</td>'+
-      '<td id="stk-cost-'+p.id+'">'+rm(p.cost)+'</td>'+
-      '<td id="stk-sell-'+p.id+'">'+rm(p.sell)+'</td>'+
-      '<td id="stk-mgn-'+p.id+'"><span class="mp">'+m.toFixed(1)+'%</span></td>'+
-      '<td style="white-space:nowrap">'+
-        '<button class="btn btn-sm btn-b" style="margin-right:4px" onclick="amendStk('+p.id+')">Edit</button>'+
-        '<button class="btn btn-sm btn-d" onclick="delStk('+p.id+')">Remove</button>'+
-      '</td>'+
-    '</tr>';
-  }).join('');
+  var wrap=document.getElementById('stk-grouped');
+  var showArchived=document.getElementById('stk-show-archived')&&document.getElementById('stk-show-archived').checked;
+  var items=D.stock.filter(function(p){return showArchived||!p.archived;});
+  if(!items.length){
+    wrap.innerHTML='<div class="empty" style="padding:30px;text-align:center">No stock items yet.</div>';
+    return;
+  }
+  /* group by category */
+  var groups={};
+  STK_CATS.forEach(function(cat){groups[cat]=[];});
+  items.forEach(function(p){
+    var cat=p.cat||'Others';
+    if(!groups[cat]) groups[cat]=[];
+    groups[cat].push(p);
+  });
+  var html='';
+  STK_CATS.forEach(function(cat){
+    var prods=groups[cat];
+    if(!prods||!prods.length) return;
+    html+=
+      '<div style="margin-bottom:20px">'+
+      '<div style="font-size:12px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.06em;'+
+        'padding:6px 14px;background:#f5f5f4;border-radius:8px;margin-bottom:8px;display:flex;align-items:center;gap:6px">'+
+        '<span>'+STK_CAT_ICONS[cat]+'</span><span>'+cat+'</span>'+
+        '<span style="font-size:11px;font-weight:400;color:#aaa;margin-left:4px">('+prods.length+')</span>'+
+      '</div>'+
+      '<div class="card" style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0">'+
+      '<table style="min-width:580px;table-layout:auto">'+
+      '<thead><tr>'+
+        '<th>Item <span style="font-size:10px;color:#bbb;font-weight:400">🔒</span></th>'+
+        '<th style="width:70px">Unit</th>'+
+        '<th style="width:96px">Cost(A$)</th>'+
+        '<th style="width:96px">Sell(A$)</th>'+
+        '<th style="width:76px">Margin</th>'+
+        '<th style="width:180px;white-space:nowrap">Action</th>'+
+      '</tr></thead><tbody>';
+    prods.forEach(function(p){
+      var m=p.sell>0?((p.sell-p.cost)/p.sell*100):0;
+      var archiveStyle=p.archived?'opacity:0.5;background:#fafafa;':'';
+      html+='<tr id="stk-row-'+p.id+'" style="'+archiveStyle+'">'+
+        '<td id="stk-name-'+p.id+'" style="font-weight:600">'+(p.archived?'<span style="font-size:10px;background:#f0f0f0;color:#aaa;padding:1px 6px;border-radius:4px;margin-right:4px">Archived</span>':'')+esc(p.name)+'</td>'+
+        '<td id="stk-unit-'+p.id+'" style="color:#888">'+(p.unit||'—')+'</td>'+
+        '<td id="stk-cost-'+p.id+'">'+rm(p.cost)+'</td>'+
+        '<td id="stk-sell-'+p.id+'">'+rm(p.sell)+'</td>'+
+        '<td id="stk-mgn-'+p.id+'"><span class="mp">'+m.toFixed(1)+'%</span></td>'+
+        '<td style="white-space:nowrap" id="stk-act-'+p.id+'">'+
+          (!p.archived?'<button class="btn btn-sm btn-b" style="margin-right:4px" onclick="amendStk('+p.id+')">Edit</button>':'')+
+          '<button class="btn btn-sm btn-o" style="margin-right:4px" onclick="archiveStk('+p.id+')">'+
+            (p.archived?'Unarchive':'Archive')+'</button>'+
+          (!p.archived?'<button class="btn btn-sm btn-d" onclick="delStk('+p.id+')">Remove</button>':'')+
+        '</td>'+
+      '</tr>';
+    });
+    html+='</tbody></table></div></div>';
+  });
+  wrap.innerHTML=html;
 }
 
 function amendStk(id){
   var p=sp(id);if(!p)return;
-  /* lock name cell — show it's read-only */
   var nameCell=document.getElementById('stk-name-'+id);
   if(nameCell) nameCell.innerHTML=
     '<span style="display:inline-flex;align-items:center;gap:5px;color:#aaa">'+
@@ -2196,15 +2243,18 @@ function amendStk(id){
     '</span>';
   var unitCell=document.getElementById('stk-unit-'+id);
   if(unitCell) unitCell.style.color='#ccc';
-  /* swap cost and sell cells to inputs */
   document.getElementById('stk-cost-'+id).innerHTML=
     '<input id="se-cost-'+id+'" type="number" step="0.01" min="0" value="'+p.cost.toFixed(2)+'" style="width:80px;font-size:12px;padding:4px 7px;border:1px solid #bfdbfe;border-radius:5px;text-align:right">';
   document.getElementById('stk-sell-'+id).innerHTML=
     '<input id="se-sell-'+id+'" type="number" step="0.01" min="0" value="'+p.sell.toFixed(2)+'" style="width:80px;font-size:12px;padding:4px 7px;border:1px solid #bfdbfe;border-radius:5px;text-align:right" oninput="previewMargin('+id+')">';
   document.getElementById('stk-mgn-'+id).innerHTML=
     '<span id="se-mgn-'+id+'" class="mp">'+(p.sell>0?((p.sell-p.cost)/p.sell*100).toFixed(1):0)+'%</span>';
-  /* swap action buttons */
-  document.getElementById('stk-row-'+id).cells[5].innerHTML=
+  /* category edit inline */
+  var catOptions=STK_CATS.map(function(c){
+    return'<option value="'+c+'"'+(( p.cat||'Others')===c?' selected':'')+'>'+STK_CAT_ICONS[c]+' '+c+'</option>';
+  }).join('');
+  document.getElementById('stk-act-'+id).innerHTML=
+    '<select id="se-cat-'+id+'" style="font-size:11px;padding:3px 6px;border:1px solid #bfdbfe;border-radius:5px;margin-right:4px">'+catOptions+'</select>'+
     '<button class="btn btn-sm btn-g" style="margin-right:4px" onclick="saveStk('+id+')">Save</button>'+
     '<button class="btn btn-sm btn-o" onclick="renderStk()">Cancel</button>';
   document.getElementById('se-cost-'+id).focus();
@@ -2225,7 +2275,6 @@ function saveStk(id){
   if(isNaN(newCost)||isNaN(newSell)||newSell<=0){
     alert('Please enter valid prices. Sell price must be greater than zero.');return;
   }
-  /* log price change if anything actually changed */
   if(newCost!==p.cost||newSell!==p.sell){
     D.priceLog.push({
       date:new Date().toISOString().split('T')[0],
@@ -2237,9 +2286,19 @@ function saveStk(id){
   }
   p.cost=parseFloat(newCost.toFixed(2));
   p.sell=parseFloat(newSell.toFixed(2));
+  var catSel=document.getElementById('se-cat-'+id);
+  if(catSel) p.cat=catSel.value;
   saveData();
   renderStk();
   toast('Stock updated: '+p.name);
+}
+
+function archiveStk(id){
+  var p=sp(id);if(!p)return;
+  p.archived=!p.archived;
+  saveData();
+  renderStk();
+  toast(p.archived?p.name+' archived':''+p.name+' unarchived');
 }
 
 function addStock(){
@@ -2247,9 +2306,10 @@ function addStock(){
   var unit=document.getElementById('s-unit').value.trim();
   var cost=parseFloat(document.getElementById('s-cost').value)||0;
   var sell=parseFloat(document.getElementById('s-sell').value)||0;
+  var cat=document.getElementById('s-cat').value||'Others';
   var msg=document.getElementById('s-msg');
   if(!name||!sell){msg.textContent='Please enter item name and sell price.';msg.style.color='#dc2626';return}
-  D.stock.push({id:D.nid++,name:name,unit:unit,cost:cost,sell:sell});
+  D.stock.push({id:D.nid++,name:name,unit:unit,cost:cost,sell:sell,cat:cat,archived:false});
   ['s-name','s-unit','s-cost','s-sell'].forEach(function(id){document.getElementById(id).value=''});
   saveData();
   msg.textContent='Item added!';msg.style.color='#16a34a';
