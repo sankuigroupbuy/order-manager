@@ -221,6 +221,56 @@ body{font-family:'Noto Sans TC',-apple-system,BlinkMacSystemFont,sans-serif;back
   </div>
 </div>
 
+<!-- ══ CONFIRMATION SCREEN ══ -->
+<div id="confirmScreen" style="display:none;min-height:100vh;background:var(--bg)">
+  <div style="background:var(--green);padding:calc(var(--safe-top) + 20px) 20px 20px;color:#fff;position:relative;overflow:hidden">
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse 180% 140% at 110% -20%,rgba(61,122,84,.5),transparent 60%);pointer-events:none"></div>
+    <div style="font-size:11px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:10px;position:relative">確認訂單</div>
+    <div style="font-family:'DM Serif Display',serif;font-size:24px;color:#fff;margin-bottom:4px;position:relative">請確認你的訂單</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.65);position:relative">確認後訂單將會提交，唔可以更改</div>
+  </div>
+
+  <div style="max-width:520px;margin:0 auto;padding:16px 16px calc(100px + var(--safe-bot))">
+
+    <!-- customer name -->
+    <div style="background:var(--card);border-radius:14px;border:1px solid var(--border);padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
+      <div style="font-size:20px">👤</div>
+      <div>
+        <div style="font-size:12px;color:var(--ink3);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">落單人</div>
+        <div style="font-size:16px;font-weight:700;color:var(--ink)" id="conf-name"></div>
+      </div>
+    </div>
+
+    <!-- order items -->
+    <div style="background:var(--card);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px">
+      <div style="background:var(--greenll);padding:11px 16px;border-bottom:1px solid #c8dcc8;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:12px;font-weight:700;color:var(--green2);text-transform:uppercase;letter-spacing:.06em">訂單明細</div>
+        <div style="font-size:16px;font-weight:700;color:var(--green2)" id="conf-total"></div>
+      </div>
+      <div id="conf-items"></div>
+    </div>
+
+    <!-- pickup info -->
+    <div style="background:var(--card);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin-bottom:10px" id="conf-pickup-card"></div>
+
+    <!-- remarks if any -->
+    <div id="conf-remarks-card"></div>
+
+    <div style="font-size:12px;color:var(--ink3);text-align:center;line-height:1.8;margin-bottom:16px">
+      預計金額僅供參考，以實際重量為準<br>落單後群主會 WhatsApp 你確認
+    </div>
+
+  </div>
+
+  <!-- fixed bottom buttons -->
+  <div style="position:fixed;bottom:0;left:0;right:0;padding:12px 16px calc(12px + var(--safe-bot));background:rgba(247,245,240,.95);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--border);z-index:100">
+    <div style="max-width:520px;margin:0 auto;display:flex;gap:10px">
+      <button onclick="backToForm()" style="flex:1;background:var(--card);color:var(--ink2);border:1.5px solid var(--border2);border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s">← 返回修改</button>
+      <button onclick="confirmOrder()" id="conf-btn" style="flex:2;background:var(--green);color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px">✅ 確認落單</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ SUCCESS SCREEN ══ -->
 <div id="successScreen">
   <div class="suc-hero">
@@ -283,15 +333,24 @@ function snack(msg){
 function savePending(arr){try{localStorage.setItem(PEND_KEY,JSON.stringify(arr));}catch(e){snack('儲存失敗，請再試');}}
 function loadPending(){try{var v=localStorage.getItem(PEND_KEY);return v?JSON.parse(v):[];}catch(e){return[];}}
 
-/* ── BOOT: fetch from Drive, fall back to localStorage ── */
+/* ── BOOT: fetch menu from Apps Script — works on all devices ── */
 window.addEventListener('DOMContentLoaded',function(){
-  /* Use Apps Script as a CORS-safe proxy to serve the pub file */
-  var proxyUrl=SCRIPT_URL+'?action=getmenu';
-  fetch(proxyUrl)
-    .then(function(r){
-      if(!r.ok) throw new Error('fetch failed');
-      return r.json();
-    })
+  var proxyUrl=SCRIPT_URL+'?action=getmenu&callback=hillsMenuCallback';
+
+  /* JSONP approach — works on iOS Safari without CORS issues */
+  window.hillsMenuCallback=function(data){
+    if(data&&data.menu&&data.menu.length){
+      PUB=data;
+      try{localStorage.setItem('om_of_pub',JSON.stringify(data));}catch(e){}
+      tryRender();
+    } else {
+      loadFromLocal();
+    }
+  };
+
+  /* try fetch first, fall back to JSONP */
+  fetch(SCRIPT_URL+'?action=getmenu')
+    .then(function(r){return r.json();})
     .then(function(data){
       if(data&&data.menu&&data.menu.length){
         PUB=data;
@@ -302,7 +361,11 @@ window.addEventListener('DOMContentLoaded',function(){
       }
     })
     .catch(function(){
-      loadFromLocal();
+      /* fetch failed — try JSONP */
+      var s=document.createElement('script');
+      s.src=proxyUrl;
+      s.onerror=function(){loadFromLocal();};
+      document.head.appendChild(s);
     });
 });
 
@@ -455,45 +518,69 @@ function submitOrder(){
   PUB.menu.forEach(function(p){var q=qtys[p.id]||0;if(q>0)items.push({sid:p.id,qty:q,name:p.name,price:p.sell});});
   if(!items.length){snack('請至少選擇一款貨品');return;}
 
-  var btn=document.getElementById('basket-btn');
-  btn.classList.add('loading');btn.textContent='';
+  /* build confirmation screen */
+  var total=items.reduce(function(s,it){return s+it.qty*it.price;},0);
+  document.getElementById('conf-name').textContent=name;
+  document.getElementById('conf-total').textContent=rm(total);
+  document.getElementById('conf-items').innerHTML=
+    items.map(function(it){
+      return '<div style="display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid var(--border)">'
+        +'<div style="flex:1;font-size:14px;font-weight:500;color:var(--ink)">'+esc(it.name)+'</div>'
+        +'<div style="font-size:13px;color:var(--ink3);margin:0 12px">× '+it.qty+'</div>'
+        +'<div style="font-size:14px;font-weight:600;color:var(--ink)">'+rm(it.qty*it.price)+'</div>'
+      +'</div>';
+    }).join('')
+    +'<div style="display:flex;justify-content:space-between;padding:11px 16px;font-weight:700;font-size:15px;color:var(--green2)"><span>總計</span><span>'+rm(total)+'</span></div>';
+  var ph='';
+  if(PUB.pickup)   ph+='<div style="display:flex;align-items:flex-start;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border)"><span style="font-size:16px">🚗</span><div><div style="font-size:12px;font-weight:700;color:var(--ink3);margin-bottom:2px">交收時間</div><div style="font-size:13px;color:var(--ink)">'+esc(PUB.pickup)+'</div></div></div>';
+  if(PUB.location) ph+='<div style="display:flex;align-items:flex-start;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border)"><span style="font-size:16px">📍</span><div><div style="font-size:12px;font-weight:700;color:var(--ink3);margin-bottom:2px">交收地點</div><div style="font-size:13px;color:var(--ink)">'+esc(PUB.location)+'</div></div></div>';
+  ph+='<div style="display:flex;align-items:flex-start;gap:10px;padding:11px 16px"><span style="font-size:16px">💵</span><div><div style="font-size:12px;font-weight:700;color:var(--ink3);margin-bottom:2px">付款方式</div><div style="font-size:13px;color:var(--ink)">交收時現金或 PayID</div></div></div>';
+  document.getElementById('conf-pickup-card').innerHTML=ph;
+  var rem=(document.getElementById('cust-remarks').value||'').trim();
+  document.getElementById('conf-remarks-card').innerHTML=rem
+    ?'<div style="background:#fffbeb;border:1px solid #f0c060;border-radius:14px;padding:12px 16px;margin-bottom:10px;display:flex;gap:10px"><span style="font-size:16px">📝</span><div><div style="font-size:12px;font-weight:700;color:#7a4a00;margin-bottom:2px">備註</div><div style="font-size:13px;color:#5a3000">'+esc(rem)+'</div></div></div>':'';
+  var cb=document.getElementById('conf-btn');
+  cb.style.opacity='1';cb.style.pointerEvents='';cb.innerHTML='✅ 確認落單';
+  document.getElementById('formScreen').style.display='none';
+  document.getElementById('confirmScreen').style.display='block';
+  window.scrollTo({top:0,behavior:'instant'});
+}
 
-  var orderData={
-    name:name,
-    items:items,
-    remarks:(document.getElementById('cust-remarks').value||'').trim(),
-    submittedAt:new Date().toISOString(),
-    period:PUB.period||'',
-    key:API_KEY
-  };
+function backToForm(){
+  document.getElementById('confirmScreen').style.display='none';
+  document.getElementById('formScreen').style.display='block';
+  window.scrollTo({top:0,behavior:'instant'});
+}
 
+function confirmOrder(){
+  var name=document.getElementById('cust-name').value.trim();
+  var items=[];
+  PUB.menu.forEach(function(p){var q=qtys[p.id]||0;if(q>0)items.push({sid:p.id,qty:q,name:p.name,price:p.sell});});
+  var btn=document.getElementById('conf-btn');
+  btn.style.opacity='.7';btn.style.pointerEvents='none';
+  btn.innerHTML='<span style="width:18px;height:18px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle"></span>';
+  var orderData={name:name,items:items,remarks:(document.getElementById('cust-remarks').value||'').trim(),submittedAt:new Date().toISOString(),period:PUB.period||'',key:API_KEY};
   if(SCRIPT_URL&&SCRIPT_URL.indexOf('PASTE')<0){
-    /* send to Apps Script */
-    fetch(SCRIPT_URL,{
-      method:'POST',
-      headers:{'Content-Type':'text/plain'}, /* avoid CORS preflight */
-      body:JSON.stringify(orderData)
-    }).then(function(r){return r.json();}).then(function(resp){
-      if(resp.status==='ok'){
-        /* update local proof counts optimistically */
-        items.forEach(function(it){
-          var m=PUB.menu.find(function(x){return x.id===it.sid;});
-          if(m) m.count=(m.count||0)+1;
-        });
+    fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(orderData)})
+      .then(function(r){return r.json();})
+      .then(function(resp){
+        if(resp.status==='ok'){
+          items.forEach(function(it){var m=PUB.menu.find(function(x){return x.id===it.sid;});if(m)m.count=(m.count||0)+1;});
+          document.getElementById('confirmScreen').style.display='none';
+          showSuccess(name,items);
+        } else {
+          snack('提交失敗，請再試');
+          btn.style.opacity='1';btn.style.pointerEvents='';btn.innerHTML='✅ 確認落單';
+        }
+      }).catch(function(){
+        fallbackSave(orderData);
+        document.getElementById('confirmScreen').style.display='none';
         showSuccess(name,items);
-      } else {
-        snack('提交失敗，請再試');
-        btn.classList.remove('loading');btn.textContent='確認落單 →';
-      }
-    }).catch(function(){
-      /* network error — fall back to localStorage */
-      fallbackSave(orderData);
-      showSuccess(name,items);
-    });
+      });
   } else {
-    /* no Apps Script yet — save locally */
     setTimeout(function(){
       fallbackSave(orderData);
+      document.getElementById('confirmScreen').style.display='none';
       showSuccess(name,items);
     },650);
   }
@@ -535,6 +622,7 @@ function resetForm(){
   document.getElementById('cust-name').value='';
   document.getElementById('cust-remarks').value='';
   document.getElementById('successScreen').style.display='none';
+  document.getElementById('confirmScreen').style.display='none';
   document.getElementById('formScreen').style.display='block';
   var btn=document.getElementById('basket-btn');
   btn.classList.remove('loading');btn.textContent='確認落單 →';
@@ -661,69 +749,6 @@ function updateSummary(){
   document.getElementById('sum-content').innerHTML=html;
 }
 
-function submitOrder(){
-  var name=document.getElementById('cust-name').value.trim();
-  if(!name){
-    var inp=document.getElementById('cust-name');
-    inp.classList.add('error');
-    inp.focus();
-    snack('請先輸入你的姓名');
-    setTimeout(function(){inp.classList.remove('error');},2500);
-    return;
-  }
-  var items=[];
-  PUB.menu.forEach(function(p){var q=qtys[p.id]||0;if(q>0)items.push({sid:p.id,qty:q});});
-  if(!items.length){snack('請至少選擇一款貨品');return;}
-  var btn=document.getElementById('basket-btn');
-  btn.classList.add('loading');btn.textContent='';
-  setTimeout(function(){
-    var pending=loadPending();
-    pending.push({name:name,items:items,remarks:(document.getElementById('cust-remarks').value||'').trim(),submittedAt:new Date().toISOString()});
-    savePending(pending);
-    showSuccess(name,items);
-  },650);
-}
-
-function showSuccess(name,items){
-  document.getElementById('formScreen').style.display='none';
-  document.getElementById('successScreen').style.display='block';
-  window.scrollTo({top:0,behavior:'instant'});
-  document.getElementById('suc-title').textContent='多謝 '+name+'！';
-  var total=0;
-  var iHtml=items.map(function(it){
-    var p=PUB.menu.find(function(x){return x.id===it.sid;});
-    if(!p)return '';
-    var sub=it.qty*p.sell;total+=sub;
-    return '<div class="suc-item"><span class="suc-item-name">'+esc(p.name)+'</span><span class="suc-item-qty">× '+it.qty+'</span><span class="suc-item-price">'+rm(sub)+'</span></div>';
-  }).join('');
-  document.getElementById('suc-items').innerHTML=iHtml;
-  document.getElementById('suc-total').textContent=rm(total);
-  var info='';
-  if(PUB.pickup)   info+='<div class="suc-info-row"><span class="suc-info-icon">🚗</span><div class="suc-info-body"><strong>交收時間</strong><span>'+esc(PUB.pickup)+'</span></div></div>';
-  if(PUB.location) info+='<div class="suc-info-row"><span class="suc-info-icon">📍</span><div class="suc-info-body"><strong>交收地點</strong><span>'+esc(PUB.location)+'</span></div></div>';
-  info+='<div class="suc-info-row"><span class="suc-info-icon">💵</span><div class="suc-info-body"><strong>付款方式</strong><span>交收時現金或 PayID</span></div></div>';
-  info+='<div class="suc-info-row"><span class="suc-info-icon">💬</span><div class="suc-info-body"><strong>訂單確認</strong><span>群主會盡快 WhatsApp 你</span></div></div>';
-  document.getElementById('suc-info').innerHTML=info;
-  var rem=(document.getElementById('cust-remarks').value||'').trim();
-  document.getElementById('suc-rem').innerHTML=rem
-    ?'<div class="suc-rem-card"><div class="suc-info-row" style="border-bottom:none"><span class="suc-info-icon">📝</span><div class="suc-info-body"><strong>你的備註</strong><span>'+esc(rem)+'</span></div></div></div>':'';
-}
-
-function resetForm(){
-  qtys={};
-  document.getElementById('cust-name').value='';
-  document.getElementById('cust-remarks').value='';
-  document.getElementById('successScreen').style.display='none';
-  document.getElementById('formScreen').style.display='block';
-  var btn=document.getElementById('basket-btn');
-  btn.classList.remove('loading');btn.textContent='確認落單 →';
-  document.querySelectorAll('.qnum').forEach(function(e){e.textContent='0';e.className='qnum';});
-  document.querySelectorAll('.prod-card').forEach(function(e){e.classList.remove('selected');});
-  document.querySelectorAll('.prod-img-wrap').forEach(function(e){e.classList.remove('has-qty');});
-  document.getElementById('basket-bar').classList.add('hidden');
-  updateSummary();
-  window.scrollTo({top:0,behavior:'instant'});
-}
 </script>
 </body>
 </html>
