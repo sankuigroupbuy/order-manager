@@ -260,7 +260,8 @@ body{font-family:'Noto Sans TC',-apple-system,BlinkMacSystemFont,sans-serif;back
 /* ── CONFIG — fill in SCRIPT_URL after you deploy Apps Script ── */
 var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyaoVmbMkgmm6ODjdXHJGbP-KyNbFmxbIeCRDApbLd-jt3stNwxdSE8mrk16ufk8JcFqw/exec';
 var API_KEY = 'hills-hgb-2026';
-var DRIVE_FILE_ID_KEY = 'of_pub_file_id'; /* shared with order manager */
+var DRIVE_FILE_ID = '1WdVJJii7hzCBgSpfscCboqU5mFMnKFIY';
+var DRIVE_FILE_ID_KEY = 'of_pub_file_id';
 
 var PUB_KEY='om_of_pub', PEND_KEY='om_of_pending';
 var PUB=null, qtys={};
@@ -282,26 +283,25 @@ function snack(msg){
 function savePending(arr){try{localStorage.setItem(PEND_KEY,JSON.stringify(arr));}catch(e){snack('儲存失敗，請再試');}}
 function loadPending(){try{var v=localStorage.getItem(PEND_KEY);return v?JSON.parse(v):[];}catch(e){return[];}}
 
-/* ── BOOT: try Drive first, fall back to localStorage ── */
+/* ── BOOT: fetch from Drive, fall back to localStorage ── */
 window.addEventListener('DOMContentLoaded',function(){
-  var fileId=localStorage.getItem(DRIVE_FILE_ID_KEY);
-  if(fileId){
-    /* fetch from Google Drive public URL */
-    fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media&key=AIzaSyD-placeholder',{
-      headers:{'Accept':'application/json'}
-    }).then(function(r){
-      if(!r.ok) throw new Error('Drive fetch failed');
+  /* always try Drive first using hardcoded file ID */
+  var driveUrl='https://drive.google.com/uc?export=download&id='+DRIVE_FILE_ID;
+  fetch(driveUrl)
+    .then(function(r){
+      if(!r.ok) throw new Error('Drive fetch failed: '+r.status);
       return r.json();
-    }).then(function(data){
+    })
+    .then(function(data){
       PUB=data;
+      /* cache file ID for order manager */
+      try{localStorage.setItem(DRIVE_FILE_ID_KEY,DRIVE_FILE_ID);}catch(e){}
       tryRender();
-    }).catch(function(){
+    })
+    .catch(function(){
       /* Drive failed — fall back to localStorage */
       loadFromLocal();
     });
-  } else {
-    loadFromLocal();
-  }
 });
 
 function loadFromLocal(){
