@@ -806,9 +806,15 @@ textarea{resize:vertical;min-height:60px}
           </div>
           <div style="font-size:11px;color:#aaa;margin-top:3px">Orders submitted by customers via the order form link</div>
         </div>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-o btn-sm" onclick="ofRefreshPending()">↻ Refresh</button>
-          <button class="btn btn-p btn-sm" id="of-import-btn" style="display:none" onclick="ofImportAll()">✅ Import all to orders</button>
+          <div id="of-import-row" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:6px">
+              <label style="font-size:12px;color:#555;white-space:nowrap">Run date:</label>
+              <input type="date" id="of-import-date" style="font-size:12px;padding:5px 8px;border:1px solid #e0e0e0;border-radius:7px;outline:none;font-family:inherit">
+            </div>
+            <button class="btn btn-p btn-sm" id="of-import-btn" onclick="ofImportAll()">✅ Import all to orders</button>
+          </div>
         </div>
       </div>
       <div id="of-pend-list"><div class="empty">No pending orders yet.</div></div>
@@ -4851,9 +4857,14 @@ function ofRefreshPending(){
   var pending=ofRead(OF.PEND_KEY)||[];
   var badge=document.getElementById('of-pend-badge');
   var list=document.getElementById('of-pend-list');
-  var btn=document.getElementById('of-import-btn');
+  var importRow=document.getElementById('of-import-row');
   if(badge) badge.textContent=pending.length;
-  if(btn) btn.style.display=pending.length?'':'none';
+  if(importRow){
+    importRow.style.display=pending.length?'flex':'none';
+    /* set date picker default to today if empty */
+    var dp=document.getElementById('of-import-date');
+    if(dp&&!dp.value) dp.value=new Date().toISOString().split('T')[0];
+  }
   if(!list) return;
   if(!pending.length){list.innerHTML='<div class="empty">No pending orders yet. Publish the form and share the link.</div>';return;}
 
@@ -4890,16 +4901,22 @@ function ofRefreshPending(){
       +'</div>';
     });
 
-    /* add product dropdown — all stock not already in order */
+    /* add product dropdown */
     var usedIds=po.items.map(function(it){return it.sid;});
     var addOpts=D.stock.filter(function(s){return !s.archived&&usedIds.indexOf(s.id)<0;})
       .map(function(s){return '<option value="'+s.id+'">'+esc(s.name)+' ('+rm(s.sell)+')</option>';}).join('');
 
     html+='<div style="border:1px solid #e5e5e5;border-radius:10px;margin-bottom:10px;overflow:hidden">'
-      /* header */
+      /* header — editable name */
       +'<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:#fafafa;border-bottom:1px solid #f0f0f0">'
-        +'<div><div style="font-size:14px;font-weight:700">'+esc(po.name)+'</div><div style="font-size:12px;color:#555;margin-top:2px">'+custLabel+'</div></div>'
-        +'<div style="display:flex;align-items:center;gap:10px">'
+        +'<div style="flex:1;min-width:0;margin-right:10px">'
+          +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'
+            +'<input id="pname-'+pi+'" value="'+esc(po.name)+'" onchange="ofPN('+pi+',this.value)" style="font-size:14px;font-weight:700;border:none;border-bottom:1.5px solid #e5e5e5;background:transparent;outline:none;padding:2px 0;width:100%;min-width:0;font-family:inherit" title="Click to edit name">'
+            +'<span style="font-size:10px;color:#aaa;flex-shrink:0">✏️</span>'
+          +'</div>'
+          +'<div style="font-size:12px;color:#555">'+custLabel+'</div>'
+        +'</div>'
+        +'<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">'
           +'<span style="font-size:14px;font-weight:700;color:#16a34a" id="ptot-'+pi+'">'+rm(total)+'</span>'
           +'<button onclick="ofPD('+pi+')" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">🗑 Remove</button>'
         +'</div>'
@@ -4959,19 +4976,33 @@ function ofPD(pi){ /* delete order */
   var p=ofRead(OF.PEND_KEY)||[];
   p.splice(pi,1); ofSave(OF.PEND_KEY,p); ofRefreshPending();
 }
+function ofPN(pi,val){ /* edit customer name */
+  var p=ofRead(OF.PEND_KEY)||[];
+  if(!p[pi]) return;
+  p[pi].name=val.trim();
+  ofSave(OF.PEND_KEY,p);
+  /* re-render just the customer label for this card */
+  var matched=fuzzyMatchCust(p[pi].name);
+  var custLabel=matched
+    ?'<span style="color:#16a34a;font-weight:600">✓ '+esc(matched.name)+'</span><span style="font-size:11px;color:#888;margin-left:4px">existing</span>'
+    :'<span style="color:#d97706;font-weight:600">+ New customer</span>';
+  var card=document.getElementById('pname-'+pi);
+  if(card&&card.parentNode&&card.parentNode.nextSibling)
+    card.parentNode.nextSibling.innerHTML=custLabel;
+}
 
 /* ── import all pending → D.orders ── */
 function ofImportAll(){
   var pending=ofRead(OF.PEND_KEY)||[];
   if(!pending.length){alert('No pending orders.');return;}
-  if(!confirm('Import '+pending.length+' order'+(pending.length!==1?'s':'')+' into the order manager?')) return;
+
+  /* use date picker value — fallback to today */
+  var dp=document.getElementById('of-import-date');
+  var date=dp&&dp.value?dp.value:new Date().toISOString().split('T')[0];
+
+  if(!confirm('Import '+pending.length+' order'+(pending.length!==1?'s':'')+' into the order manager?\n\nRun date: '+date)) return;
 
   var pub=ofRead(OF.PUB_KEY)||{};
-  var date=new Date().toISOString().split('T')[0];
-  if(pub.period){var m=pub.period.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-]?(\d{4})?/);
-    if(m){var yr=m[3]?parseInt(m[3]):new Date().getFullYear(),mo=parseInt(m[2]),dy=parseInt(m[1]);
-      if(mo>0&&mo<=12&&dy>0&&dy<=31) date=yr+'-'+String(mo).padStart(2,'0')+'-'+String(dy).padStart(2,'0');}}
-
   var created=0;
   pending.forEach(function(po){
     var cust=fuzzyMatchCust(po.name),cid;
@@ -4996,13 +5027,13 @@ function ofImportAll(){
       if(countDelta[m.id]) m.count=(m.count||0)+countDelta[m.id];
     });
     ofSave(OF.PUB_KEY,pub);
-    ofDriveWritePub(pub,null); /* fire-and-forget */
+    ofDriveWritePub(pub,null);
   }
 
   ofSave(OF.PEND_KEY,[]);
   ofRefreshPending();
   renderDash();renderIntM();renderInt();
-  toast(created+' order'+(created!==1?'s':'')+' imported ✓');
+  toast(created+' order'+(created!==1?'s':'')+' imported for '+date+' ✓');
 }
 
 /* boot */
