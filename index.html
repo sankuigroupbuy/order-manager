@@ -406,6 +406,7 @@ textarea{resize:vertical;min-height:60px}
     <button class="tab" onclick="show('summary')">Order summary</button>
     <button class="tab" onclick="show('delivery')">Delivery runs</button>
     <button class="tab" onclick="show('insights')">&#128202; Insights</button>
+    <button class="tab" onclick="show('orderform')">&#128203; Order Form</button>
   </div>
 
   <!-- TAB 1 -->
@@ -749,9 +750,71 @@ textarea{resize:vertical;min-height:60px}
     <div id="insights-wrap"></div>
   </div>
 
-</div>
-</div>
-</div><!-- /app-wrap -->
+  <!-- ══════════════════════════════════════════════
+       SECTION 15 — ORDER FORM ADMIN (Tab 9)
+       Controls the separate customer-order.html page
+       Shared via localStorage key: om_of_pub
+  ═══════════════════════════════════════════════ -->
+  <div id="sec-orderform" class="sec pad">
+
+    <!-- top bar -->
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px">
+      <div>
+        <div style="font-size:15px;font-weight:700">Order Form Admin</div>
+        <div style="font-size:12px;color:#888;margin-top:2px">Configure the weekly customer order page — products, photos, run details</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-o btn-sm" onclick="ofCopyLink()">📋 Copy customer link</button>
+        <button class="btn btn-p btn-sm" onclick="ofPublish()">🚀 Publish to customers</button>
+      </div>
+    </div>
+
+    <!-- run config card -->
+    <div class="card cp" style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">📅 Run details</div>
+      <div class="r4" style="margin-bottom:10px">
+        <div><label>Run period</label><input type="text" id="of-period" placeholder="e.g. 18–24/5/2026"></div>
+        <div><label>Order cutoff</label><input type="text" id="of-cutoff" placeholder="e.g. Thu 22/5 9pm"></div>
+        <div><label>Pickup location</label><input type="text" id="of-location" placeholder="e.g. Castle Towers B2"></div>
+        <div><label>Pickup time</label><input type="text" id="of-pickup" placeholder="e.g. Sat 10:00–10:30am"></div>
+      </div>
+      <div><label>Announcement (optional)</label><input type="text" id="of-notice" placeholder="e.g. New: Wild King Prawns! Limited qty."></div>
+    </div>
+
+    <!-- product picker card -->
+    <div class="card cp" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em">
+          📦 This week's products
+          <span id="of-sel-badge" style="background:#1e3a5f;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:6px">0 selected</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="of-search" placeholder="Search stock…" oninput="ofRenderPicker()" style="width:170px;font-size:12px;padding:5px 9px">
+          <button class="btn btn-o btn-sm" onclick="ofClearAll()">Clear all</button>
+        </div>
+      </div>
+      <div id="of-picker"></div>
+    </div>
+
+    <!-- pending orders card -->
+    <div class="card cp">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em">
+            📥 Incoming orders
+            <span id="of-pend-badge" style="background:#1d4ed8;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:6px">0</span>
+          </div>
+          <div style="font-size:11px;color:#aaa;margin-top:3px">Orders submitted by customers via the order form link</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-o btn-sm" onclick="ofRefreshPending()">↻ Refresh</button>
+          <button class="btn btn-p btn-sm" id="of-import-btn" style="display:none" onclick="ofImportAll()">✅ Import all to orders</button>
+        </div>
+      </div>
+      <div id="of-pend-list"><div class="empty">No pending orders yet.</div></div>
+    </div>
+
+  </div><!-- /sec-orderform -->
 <div class="toast" id="toast"></div>
 
 <script>
@@ -897,7 +960,7 @@ function esc(s){return String(s||'').replace(/&/g,'&'+'amp;').replace(/</g,'&'+'
    • show(), toggleTopbarMenu()
    ████████████████████████████████████████████████ */
 function show(tab){
-  document.querySelectorAll('.tab').forEach(function(b,i){b.classList.toggle('active',['receipt','internal','stock','customers','reports','summary','delivery','insights'][i]===tab)});
+  document.querySelectorAll('.tab').forEach(function(b,i){b.classList.toggle('active',['receipt','internal','stock','customers','reports','summary','delivery','insights','orderform'][i]===tab)});
   document.querySelectorAll('.sec').forEach(function(s){s.classList.remove('active')});
   document.getElementById('sec-'+tab).classList.add('active');
   if(tab==='receipt') renderDash();
@@ -908,7 +971,7 @@ function show(tab){
   if(tab==='summary') renderSummary();
   if(tab==='delivery'){renderRunSelector();renderDelivery();}
   if(tab==='insights') renderInsights();
-  /* close mobile menu on tab change */
+  if(tab==='orderform'){ofRenderPicker();ofLoadConfig();ofRefreshPending();}
   var menu=document.getElementById('topbar-actions');
   if(menu) menu.classList.remove('open');
 }
@@ -4470,6 +4533,477 @@ window.addEventListener('resize',function(){
     if(tab==='insights') renderInsights();
   },250);
 });
+
+/* ████████████████████████████████████████████████████████
+   SECTION 15 — ORDER FORM ADMIN
+   Keys:
+     om_of_cfg     — admin config (period, cutoff, selectedIds, photos, notes)
+     om_of_pub     — published menu read by customer-order.html
+     om_of_pending — orders submitted by customers
+   ████████████████████████████████████████████████████████ */
+
+var OF={
+  CFG_KEY:'om_of_cfg',
+  PUB_KEY:'om_of_pub',
+  PEND_KEY:'om_of_pending',
+  sel:new Set(),
+  photos:{},
+  notes:{},
+  DRIVE_FOLDER:'13SY_0SUIU0xLHZO7YJB1IhhRW46k-jmp', /* public Hills Group Buy folder */
+  PUB_FILENAME:'hills-menu-pub.json',
+  pubFileId:null   /* cached Drive file ID for pub file */
+};
+
+/* ── storage helpers ── */
+function ofSave(key,val){try{localStorage.setItem(key,JSON.stringify(val));}catch(e){toast('Storage full — try removing large photos');}}
+function ofRead(key){try{var v=localStorage.getItem(key);return v?JSON.parse(v):null;}catch(e){return null;}}
+
+/* ── load saved config into UI ── */
+function ofLoadConfig(){
+  var cfg=ofRead(OF.CFG_KEY);
+  if(!cfg) return;
+  document.getElementById('of-period').value  =cfg.period  ||'';
+  document.getElementById('of-cutoff').value  =cfg.cutoff  ||'';
+  document.getElementById('of-location').value=cfg.location||'';
+  document.getElementById('of-pickup').value  =cfg.pickup  ||'';
+  document.getElementById('of-notice').value  =cfg.notice  ||'';
+  OF.sel=new Set(cfg.selectedIds||[]);
+  OF.photos=cfg.photos||{};
+  OF.notes=cfg.notes||{};
+  ofRenderPicker();
+}
+
+/* ── render the product picker grid ── */
+function ofRenderPicker(){
+  var q=(document.getElementById('of-search')||{value:''}).value.toLowerCase();
+  var stocks=D.stock.filter(function(s){
+    return !s.archived && (!q||s.name.toLowerCase().includes(q)||(s.cat||'').toLowerCase().includes(q));
+  }).slice().sort(function(a,b){return (a.cat||'').localeCompare(b.cat||'')||a.name.localeCompare(b.name,'zh');});
+
+  if(!stocks.length){
+    document.getElementById('of-picker').innerHTML='<div class="empty">No stock items match.</div>';
+    return;
+  }
+
+  /* group by category */
+  var byCat={};
+  stocks.forEach(function(s){var c=s.cat||'Others';if(!byCat[c])byCat[c]=[];byCat[c].push(s);});
+
+  var html='';
+  Object.keys(byCat).sort().forEach(function(cat){
+    html+='<div style="font-size:10px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.07em;margin:12px 0 7px">'+esc(cat)+'</div>';
+    html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-bottom:4px">';
+    byCat[cat].forEach(function(s){
+      var on=OF.sel.has(s.id);
+      var mg=s.sell>0?((s.sell-s.cost)/s.sell*100):0;
+      var mc=mg>=30?'#16a34a':mg>=15?'#d97706':'#dc2626';
+      var hasPhoto=!!(OF.photos[s.id]);
+      html+='<div id="ofcard-'+s.id+'" onclick="ofToggle('+s.id+')" style="border:1.5px solid '+(on?'#1e3a5f':'#e5e5e5')+';border-radius:10px;background:'+(on?'#eff6ff':'#fff')+';cursor:pointer;overflow:hidden;transition:all .12s">'
+        /* photo strip */
+        +'<div style="height:80px;background:'+(hasPhoto?'transparent':'#f5f5f5')+';display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden">'
+          +(hasPhoto
+            ?'<img src="'+OF.photos[s.id]+'" style="width:100%;height:80px;object-fit:cover;display:block">'
+            :'<span style="font-size:24px">'+ofCatEmoji(s.cat)+'</span>')
+          /* photo upload button */
+          +'<label onclick="event.stopPropagation()" title="Upload photo" style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.55);color:#fff;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:600;cursor:pointer">'
+            +'📷<input type="file" accept="image/*" style="display:none" onchange="ofUploadPhoto(event,'+s.id+')">'
+          +'</label>'
+          +(hasPhoto?'<button onclick="ofRemovePhoto(event,'+s.id+')" title="Remove photo" style="position:absolute;top:4px;right:4px;background:rgba(220,38,38,.8);color:#fff;border:none;border-radius:5px;padding:2px 6px;font-size:10px;font-weight:700;cursor:pointer">×</button>':'')
+        +'</div>'
+        /* card body */
+        +'<div style="padding:9px 11px">'
+          +'<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:3px">'
+            +'<div style="width:16px;height:16px;border-radius:4px;border:1.5px solid '+(on?'#1e3a5f':'#ccc')+';background:'+(on?'#1e3a5f':'transparent')+';display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:#fff;flex-shrink:0;margin-top:1px">'+(on?'✓':'')+'</div>'
+            +'<div style="font-size:13px;font-weight:600;color:#1a1a1a;line-height:1.3">'+esc(s.name)+'</div>'
+          +'</div>'
+          +'<div style="font-size:11px;color:#aaa;padding-left:22px">'+rm(s.sell)+' · <span style="color:'+mc+';font-weight:600">'+mg.toFixed(0)+'% margin</span></div>'
+          /* display note input — shown only when selected */
+          +(on?'<div style="padding-left:22px;margin-top:6px" onclick="event.stopPropagation()"><input id="ofnote-'+s.id+'" type="text" value="'+esc(OF.notes[s.id]||'')+'" placeholder="Display note (e.g. ~1kg/pack)" oninput="OF.notes['+s.id+']=this.value" style="width:100%;font-size:11px;padding:4px 7px;border:1px solid #e5e5e5;border-radius:5px"></div>':'')
+        +'</div>'
+      +'</div>';
+    });
+    html+='</div>';
+  });
+
+  document.getElementById('of-picker').innerHTML=html;
+  document.getElementById('of-sel-badge').textContent=OF.sel.size+' selected';
+}
+
+function ofCatEmoji(cat){
+  var map={'Meat':'🥩','Fish':'🐟','Seafood':'🦐','Hills Sweets NMC':'🍡','Others':'📦'};
+  return map[cat]||'📦';
+}
+
+function ofToggle(id){
+  if(OF.sel.has(id)) OF.sel.delete(id);
+  else OF.sel.add(id);
+  ofRenderPicker();
+}
+
+function ofClearAll(){
+  if(!confirm('Clear all selected products?')) return;
+  OF.sel.clear();
+  ofRenderPicker();
+}
+
+/* ── photo upload: compress to max ~300px wide, store base64 ── */
+function ofUploadPhoto(evt,stockId){
+  var file=evt.target.files[0];
+  if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var img=new Image();
+    img.onload=function(){
+      var canvas=document.createElement('canvas');
+      var MAX=400;
+      var ratio=Math.min(MAX/img.width,MAX/img.height,1);
+      canvas.width=Math.round(img.width*ratio);
+      canvas.height=Math.round(img.height*ratio);
+      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      OF.photos[stockId]=canvas.toDataURL('image/jpeg',0.75);
+      ofRenderPicker();
+      toast('Photo saved for '+esc((D.stock.find(function(s){return s.id===stockId;})||{}).name||'item'));
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function ofRemovePhoto(evt,stockId){
+  evt.stopPropagation();
+  delete OF.photos[stockId];
+  ofRenderPicker();
+}
+
+/* ── save config draft ── */
+function ofSaveDraft(){
+  var cfg={
+    period:  document.getElementById('of-period').value.trim(),
+    cutoff:  document.getElementById('of-cutoff').value.trim(),
+    location:document.getElementById('of-location').value.trim(),
+    pickup:  document.getElementById('of-pickup').value.trim(),
+    notice:  document.getElementById('of-notice').value.trim(),
+    selectedIds:[...OF.sel],
+    photos:  OF.photos,
+    notes:   OF.notes
+  };
+  ofSave(OF.CFG_KEY,cfg);
+  return cfg;
+}
+
+/* ── publish: seed counts from D.orders, save locally + write to Drive ── */
+function ofPublish(){
+  if(!document.getElementById('of-period').value.trim()){alert('Please enter the run period.');document.getElementById('of-period').focus();return;}
+  if(!document.getElementById('of-cutoff').value.trim()){alert('Please enter the cutoff time.');document.getElementById('of-cutoff').focus();return;}
+  if(!OF.sel.size){alert('Please select at least one product.');return;}
+
+  var cfg=ofSaveDraft();
+
+  /* seed counts: count D.orders matching this run period */
+  var counts={};
+  var periodStart=null;
+  if(cfg.period){
+    var pm=cfg.period.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-]?(\d{4})?/);
+    if(pm){
+      var yr=pm[3]?parseInt(pm[3]):new Date().getFullYear();
+      var mo=parseInt(pm[2]),dy=parseInt(pm[1]);
+      if(mo>0&&mo<=12&&dy>0&&dy<=31)
+        periodStart=yr+'-'+String(mo).padStart(2,'0')+'-'+String(dy).padStart(2,'0');
+    }
+  }
+  /* look back up to 14 days from period start, or use all orders if no date */
+  D.orders.forEach(function(o){
+    if(periodStart&&o.date<periodStart) return; /* skip orders before this run */
+    o.items.forEach(function(it){
+      counts[it.s]=(counts[it.s]||0)+1;
+    });
+  });
+
+  var menu=cfg.selectedIds.map(function(id){
+    var s=D.stock.find(function(x){return x.id===id;});
+    if(!s) return null;
+    return{
+      id:s.id,
+      name:s.name,
+      cat:s.cat||'Others',
+      sell:s.sell,
+      note:cfg.notes[id]||s.unit||'',
+      photo:cfg.photos[id]||null,
+      count:counts[id]||0   /* seeded from real order history */
+    };
+  }).filter(Boolean);
+
+  var pub={
+    period:cfg.period,
+    cutoff:cfg.cutoff,
+    location:cfg.location,
+    pickup:cfg.pickup,
+    notice:cfg.notice,
+    menu:menu,
+    publishedAt:new Date().toISOString()
+  };
+  ofSave(OF.PUB_KEY,pub);
+
+  /* write to Google Drive public folder if connected */
+  if(GD.accessToken){
+    ofDriveWritePub(pub,function(ok){
+      if(ok) toast('Published to Drive! '+menu.length+' products live ✓');
+      else   toast('Published locally. Drive write failed — check connection.');
+    });
+  } else {
+    toast('Published locally ('+menu.length+' products). Connect Google Drive to sync publicly.');
+  }
+}
+
+/* ── write/update hills-menu-pub.json in public Drive folder ── */
+function ofDriveWritePub(pubData,cb){
+  var payload=JSON.stringify(pubData);
+  function doUpload(fileId){
+    var boundary='hills_pub_'+Date.now();
+    var body=
+      '--'+boundary+'\r\n'+
+      'Content-Type: application/json\r\n\r\n'+
+      JSON.stringify({name:OF.PUB_FILENAME})+'\r\n'+
+      '--'+boundary+'\r\n'+
+      'Content-Type: application/json\r\n\r\n'+
+      payload+'\r\n'+
+      '--'+boundary+'--';
+    var url=fileId
+      ?'https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=multipart'
+      :'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+    fetch(url,{
+      method:fileId?'PATCH':'POST',
+      headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'multipart/related; boundary='+boundary},
+      body:body
+    }).then(function(r){return r.json();}).then(function(f){
+      if(f.id){
+        OF.pubFileId=f.id;
+        /* make file publicly readable */
+        fetch('https://www.googleapis.com/drive/v3/files/'+f.id+'/permissions',{
+          method:'POST',
+          headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'application/json'},
+          body:JSON.stringify({role:'reader',type:'anyone'})
+        }).catch(function(){/* permission may already exist */});
+        localStorage.setItem('of_pub_file_id',f.id);
+        if(cb) cb(true);
+      } else {
+        console.error('Drive pub write error',f);
+        if(cb) cb(false);
+      }
+    }).catch(function(e){console.error(e);if(cb) cb(false);});
+  }
+  /* use cached file ID or search for existing file */
+  var cached=OF.pubFileId||localStorage.getItem('of_pub_file_id');
+  if(cached){OF.pubFileId=cached;doUpload(cached);return;}
+  fetch('https://www.googleapis.com/drive/v3/files?q=name%3D%22'+encodeURIComponent(OF.PUB_FILENAME)+'%22+and+%22'+OF.DRIVE_FOLDER+'%22+in+parents+and+trashed%3Dfalse&fields=files(id)',{
+    headers:{Authorization:'Bearer '+GD.accessToken}
+  }).then(function(r){return r.json();}).then(function(d){
+    if(d.files&&d.files.length>0){
+      OF.pubFileId=d.files[0].id;
+      localStorage.setItem('of_pub_file_id',OF.pubFileId);
+      doUpload(OF.pubFileId);
+    } else {
+      /* create new — include parent folder */
+      var boundary='hills_pub_create_'+Date.now();
+      var body=
+        '--'+boundary+'\r\n'+
+        'Content-Type: application/json\r\n\r\n'+
+        JSON.stringify({name:OF.PUB_FILENAME,parents:[OF.DRIVE_FOLDER]})+'\r\n'+
+        '--'+boundary+'\r\n'+
+        'Content-Type: application/json\r\n\r\n'+
+        payload+'\r\n'+
+        '--'+boundary+'--';
+      fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
+        method:'POST',
+        headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'multipart/related; boundary='+boundary},
+        body:body
+      }).then(function(r){return r.json();}).then(function(f){
+        if(f.id){
+          OF.pubFileId=f.id;
+          localStorage.setItem('of_pub_file_id',f.id);
+          fetch('https://www.googleapis.com/drive/v3/files/'+f.id+'/permissions',{
+            method:'POST',
+            headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'application/json'},
+            body:JSON.stringify({role:'reader',type:'anyone'})
+          }).catch(function(){});
+          if(cb) cb(true);
+        } else {if(cb) cb(false);}
+      }).catch(function(e){console.error(e);if(cb) cb(false);});
+    }
+  }).catch(function(e){console.error(e);if(cb) cb(false);});
+}
+
+/* ── copy customer link ── */
+function ofCopyLink(){
+  /* customer-order.html sits alongside order-manager in same folder */
+  var base=window.location.href.replace(/[^\/]*$/,'').replace(/\?.*$/,'');
+  var url=base+'customer-order.html';
+  navigator.clipboard.writeText(url).then(function(){toast('Customer link copied ✓');}).catch(function(){
+    var ta=document.createElement('textarea');ta.value=url;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    toast('Link copied: '+url);
+  });
+}
+
+/* ════════════════════════════════════════
+   PENDING ORDERS — review & edit
+   ════════════════════════════════════════ */
+function ofRefreshPending(){
+  var pending=ofRead(OF.PEND_KEY)||[];
+  var badge=document.getElementById('of-pend-badge');
+  var list=document.getElementById('of-pend-list');
+  var btn=document.getElementById('of-import-btn');
+  if(badge) badge.textContent=pending.length;
+  if(btn) btn.style.display=pending.length?'':'none';
+  if(!list) return;
+  if(!pending.length){list.innerHTML='<div class="empty">No pending orders yet. Publish the form and share the link.</div>';return;}
+
+  var pub=ofRead(OF.PUB_KEY)||{};
+  var menuMap={};
+  (pub.menu||[]).forEach(function(m){menuMap[m.id]=m;});
+
+  var html='';
+  pending.forEach(function(po,pi){
+    var matched=fuzzyMatchCust(po.name);
+    var custLabel=matched
+      ?'<span style="color:#16a34a;font-weight:600">✓ '+esc(matched.name)+'</span><span style="font-size:11px;color:#888;margin-left:4px">existing</span>'
+      :'<span style="color:#d97706;font-weight:600">+ New customer</span>';
+
+    var total=po.items.reduce(function(s,it){
+      var stk=D.stock.find(function(x){return x.id===it.sid;});
+      return s+(stk?stk.sell*(it.qty||0):0);
+    },0);
+
+    var rows='';
+    po.items.forEach(function(it,ii){
+      var stk=D.stock.find(function(x){return x.id===it.sid;});
+      var nm=stk?stk.name:('Product #'+it.sid);
+      var up=stk?stk.sell:0;
+      rows+='<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f5f5f5">'
+        +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500">'+esc(nm)+'</div><div style="font-size:11px;color:#aaa">'+rm(up)+'/unit</div></div>'
+        +'<div style="display:flex;align-items:center;border:1.5px solid #e5e5e5;border-radius:7px;overflow:hidden" id="pqw-'+pi+'-'+ii+'">'
+          +'<button onclick="ofPQ('+pi+','+ii+',-1)" style="width:28px;height:28px;background:#f5f5f5;border:none;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#555">−</button>'
+          +'<span style="min-width:26px;text-align:center;font-size:13px;font-weight:700" id="pqd-'+pi+'-'+ii+'">'+it.qty+'</span>'
+          +'<button onclick="ofPQ('+pi+','+ii+',1)" style="width:28px;height:28px;background:#f5f5f5;border:none;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#555">+</button>'
+        +'</div>'
+        +'<div style="font-size:13px;font-weight:600;color:#16a34a;min-width:46px;text-align:right" id="psub-'+pi+'-'+ii+'">'+rm(up*(it.qty||0))+'</div>'
+        +'<button onclick="ofPI('+pi+','+ii+')" style="background:none;border:none;color:#dc2626;font-size:17px;cursor:pointer;padding:2px 4px;line-height:1" title="Remove">×</button>'
+      +'</div>';
+    });
+
+    /* add product dropdown — all stock not already in order */
+    var usedIds=po.items.map(function(it){return it.sid;});
+    var addOpts=D.stock.filter(function(s){return !s.archived&&usedIds.indexOf(s.id)<0;})
+      .map(function(s){return '<option value="'+s.id+'">'+esc(s.name)+' ('+rm(s.sell)+')</option>';}).join('');
+
+    html+='<div style="border:1px solid #e5e5e5;border-radius:10px;margin-bottom:10px;overflow:hidden">'
+      /* header */
+      +'<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:#fafafa;border-bottom:1px solid #f0f0f0">'
+        +'<div><div style="font-size:14px;font-weight:700">'+esc(po.name)+'</div><div style="font-size:12px;color:#555;margin-top:2px">'+custLabel+'</div></div>'
+        +'<div style="display:flex;align-items:center;gap:10px">'
+          +'<span style="font-size:14px;font-weight:700;color:#16a34a" id="ptot-'+pi+'">'+rm(total)+'</span>'
+          +'<button onclick="ofPD('+pi+')" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">🗑 Remove</button>'
+        +'</div>'
+      +'</div>'
+      /* items */
+      +'<div style="padding:2px 14px 4px">'+rows+'</div>'
+      /* add product */
+      +(addOpts
+        ?'<div style="display:flex;gap:8px;align-items:center;padding:9px 14px;background:#f8f9ff;border-top:1px solid #eef0f8">'
+          +'<select id="padd-'+pi+'" style="flex:1;font-size:12px;padding:6px 8px;border:1px solid #dbeafe;border-radius:6px">'
+            +'<option value="">+ Add a product…</option>'+addOpts+'</select>'
+          +'<button onclick="ofPA('+pi+')" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">Add</button>'
+        +'</div>'
+        :'')
+      /* footer */
+      +'<div style="padding:7px 14px 10px;border-top:1px solid #f0f0f0">'
+        +(po.remarks?'<div style="font-size:11px;color:#d97706;margin-bottom:3px">📝 '+esc(po.remarks)+'</div>':'')
+        +'<div style="font-size:10px;color:#bbb">Submitted '+new Date(po.submittedAt).toLocaleString()+'</div>'
+      +'</div>'
+    +'</div>';
+  });
+  list.innerHTML=html;
+}
+
+/* pending order helpers */
+function ofPQ(pi,ii,delta){ /* change qty */
+  var p=ofRead(OF.PEND_KEY)||[];
+  var it=p[pi]&&p[pi].items[ii]; if(!it) return;
+  var nv=Math.max(0,it.qty+delta);
+  if(nv===0){p[pi].items.splice(ii,1);if(!p[pi].items.length)p.splice(pi,1);ofSave(OF.PEND_KEY,p);ofRefreshPending();return;}
+  it.qty=nv; ofSave(OF.PEND_KEY,p);
+  var qd=document.getElementById('pqd-'+pi+'-'+ii); if(qd) qd.textContent=nv;
+  var stk=D.stock.find(function(x){return x.id===it.sid;});
+  var sub=stk?stk.sell*nv:0;
+  var sd=document.getElementById('psub-'+pi+'-'+ii); if(sd) sd.textContent=rm(sub);
+  var tot=(ofRead(OF.PEND_KEY)||[])[pi];
+  if(tot){var t=tot.items.reduce(function(s,x){var sk=D.stock.find(function(z){return z.id===x.sid;});return s+(sk?sk.sell*x.qty:0);},0);var td=document.getElementById('ptot-'+pi);if(td)td.textContent=rm(t);}
+}
+function ofPI(pi,ii){ /* remove item */
+  var p=ofRead(OF.PEND_KEY)||[];
+  if(!p[pi]) return;
+  p[pi].items.splice(ii,1);
+  if(!p[pi].items.length) p.splice(pi,1);
+  ofSave(OF.PEND_KEY,p); ofRefreshPending();
+}
+function ofPA(pi){ /* add product */
+  var sel=document.getElementById('padd-'+pi); if(!sel||!sel.value) return;
+  var sid=parseInt(sel.value);
+  var p=ofRead(OF.PEND_KEY)||[];
+  if(!p[pi]) return;
+  var ex=p[pi].items.find(function(it){return it.sid===sid;});
+  if(ex) ex.qty++; else p[pi].items.push({sid:sid,qty:1});
+  ofSave(OF.PEND_KEY,p); ofRefreshPending();
+}
+function ofPD(pi){ /* delete order */
+  if(!confirm('Remove this entire order?')) return;
+  var p=ofRead(OF.PEND_KEY)||[];
+  p.splice(pi,1); ofSave(OF.PEND_KEY,p); ofRefreshPending();
+}
+
+/* ── import all pending → D.orders ── */
+function ofImportAll(){
+  var pending=ofRead(OF.PEND_KEY)||[];
+  if(!pending.length){alert('No pending orders.');return;}
+  if(!confirm('Import '+pending.length+' order'+(pending.length!==1?'s':'')+' into the order manager?')) return;
+
+  var pub=ofRead(OF.PUB_KEY)||{};
+  var date=new Date().toISOString().split('T')[0];
+  if(pub.period){var m=pub.period.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-]?(\d{4})?/);
+    if(m){var yr=m[3]?parseInt(m[3]):new Date().getFullYear(),mo=parseInt(m[2]),dy=parseInt(m[1]);
+      if(mo>0&&mo<=12&&dy>0&&dy<=31) date=yr+'-'+String(mo).padStart(2,'0')+'-'+String(dy).padStart(2,'0');}}
+
+  var created=0;
+  pending.forEach(function(po){
+    var cust=fuzzyMatchCust(po.name),cid;
+    if(cust){cid=cust.id;}
+    else{var nc={id:D.nid++,name:po.name,phone:'',address:'',notes:'Added via Order Form',joined:date};D.customers.push(nc);cid=nc.id;}
+    var items=po.items.map(function(it){
+      var s=D.stock.find(function(x){return x.id===it.sid;});
+      return s?{s:s.id,q:parseFloat(it.qty)||1,sp:s.sell,cp:s.cost}:null;
+    }).filter(Boolean);
+    if(items.length){D.orders.push({id:D.nid++,cid:cid,date:date,items:items,status:'unpaid'});created++;}
+  });
+
+  saveData();
+
+  /* update counts in the published menu and re-write to Drive */
+  if(pub.menu&&GD.accessToken){
+    var countDelta={};
+    pending.forEach(function(po){
+      po.items.forEach(function(it){countDelta[it.sid]=(countDelta[it.sid]||0)+1;});
+    });
+    pub.menu.forEach(function(m){
+      if(countDelta[m.id]) m.count=(m.count||0)+countDelta[m.id];
+    });
+    ofSave(OF.PUB_KEY,pub);
+    ofDriveWritePub(pub,null); /* fire-and-forget */
+  }
+
+  ofSave(OF.PEND_KEY,[]);
+  ofRefreshPending();
+  renderDash();renderIntM();renderInt();
+  toast(created+' order'+(created!==1?'s':'')+' imported ✓');
+}
 
 /* boot */
 lkInit();
