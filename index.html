@@ -4555,9 +4555,10 @@ var OF={
   sel:new Set(),
   photos:{},
   notes:{},
-  DRIVE_FOLDER:'13SY_0SUIU0xLHZO7YJB1IhhRW46k-jmp', /* public Hills Group Buy folder */
+  DRIVE_FOLDER:'13SY_0SUIU0xLHZO7YJB1IhhRW46k-jmp',
   PUB_FILENAME:'hills-menu-pub.json',
-  pubFileId:null   /* cached Drive file ID for pub file */
+  SCRIPT_URL:'https://script.google.com/macros/s/AKfycbyaoVmbMkgmm6ODjdXHJGbP-KyNbFmxbIeCRDApbLd-jt3stNwxdSE8mrk16ufk8JcFqw/exec',
+  pubFileId:null
 };
 
 /* ── storage helpers ── */
@@ -4854,6 +4855,56 @@ function ofCopyLink(){
    PENDING ORDERS — review & edit
    ════════════════════════════════════════ */
 function ofRefreshPending(){
+  var list=document.getElementById('of-pend-list');
+  var badge=document.getElementById('of-pend-badge');
+  var importRow=document.getElementById('of-import-row');
+  var dp=document.getElementById('of-import-date');
+
+  /* show loading state */
+  if(list) list.innerHTML='<div class="empty" style="color:#888">Loading orders...</div>';
+
+  var scriptUrl=localStorage.getItem('of_script_url')||'';
+
+  /* try fetching from Apps Script first */
+  var asUrl=OF.SCRIPT_URL+'?action=getorders';
+  fetch(asUrl)
+    .then(function(r){return r.json();})
+    .then(function(resp){
+      if(resp.status==='ok'&&resp.orders){
+        /* merge sheet orders into localStorage pending */
+        var existing=ofRead(OF.PEND_KEY)||[];
+        var existingNames=existing.map(function(o){return o.name+o.submittedAt;});
+        var newOrders=resp.orders.filter(function(o){
+          return existingNames.indexOf(o.name+(o.submittedAt||''))<0;
+        }).map(function(o){
+          /* convert sheet format back to pending format */
+          return {
+            name:o.name,
+            items:o.items.map(function(it){
+              /* try to match name back to stock ID */
+              var stk=D.stock.find(function(s){return s.name===it.name;});
+              return stk?{sid:stk.id,qty:it.qty}:{sid:0,qty:it.qty,_name:it.name};
+            }),
+            remarks:o.remarks||'',
+            submittedAt:o.submittedAt||new Date().toISOString(),
+            sheetRow:o.rowIndex
+          };
+        });
+        if(newOrders.length>0){
+          var merged=existing.concat(newOrders);
+          ofSave(OF.PEND_KEY,merged);
+          toast(newOrders.length+' new order'+(newOrders.length!==1?'s':'')+' fetched from Sheet ✓');
+        }
+      }
+      renderPendingList();
+    })
+    .catch(function(){
+      /* Apps Script unavailable — use localStorage only */
+      renderPendingList();
+    });
+}
+
+function renderPendingList(){
   var pending=ofRead(OF.PEND_KEY)||[];
   var badge=document.getElementById('of-pend-badge');
   var list=document.getElementById('of-pend-list');
@@ -4861,16 +4912,11 @@ function ofRefreshPending(){
   if(badge) badge.textContent=pending.length;
   if(importRow){
     importRow.style.display=pending.length?'flex':'none';
-    /* set date picker default to today if empty */
     var dp=document.getElementById('of-import-date');
     if(dp&&!dp.value) dp.value=new Date().toISOString().split('T')[0];
   }
   if(!list) return;
   if(!pending.length){list.innerHTML='<div class="empty">No pending orders yet. Publish the form and share the link.</div>';return;}
-
-  var pub=ofRead(OF.PUB_KEY)||{};
-  var menuMap={};
-  (pub.menu||[]).forEach(function(m){menuMap[m.id]=m;});
 
   var html='';
   pending.forEach(function(po,pi){
@@ -4878,16 +4924,14 @@ function ofRefreshPending(){
     var custLabel=matched
       ?'<span style="color:#16a34a;font-weight:600">✓ '+esc(matched.name)+'</span><span style="font-size:11px;color:#888;margin-left:4px">existing</span>'
       :'<span style="color:#d97706;font-weight:600">+ New customer</span>';
-
     var total=po.items.reduce(function(s,it){
       var stk=D.stock.find(function(x){return x.id===it.sid;});
       return s+(stk?stk.sell*(it.qty||0):0);
     },0);
-
     var rows='';
     po.items.forEach(function(it,ii){
       var stk=D.stock.find(function(x){return x.id===it.sid;});
-      var nm=stk?stk.name:('Product #'+it.sid);
+      var nm=stk?stk.name:(it._name||('Product #'+it.sid));
       var up=stk?stk.sell:0;
       rows+='<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f5f5f5">'
         +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500">'+esc(nm)+'</div><div style="font-size:11px;color:#aaa">'+rm(up)+'/unit</div></div>'
@@ -4900,18 +4944,14 @@ function ofRefreshPending(){
         +'<button onclick="ofPI('+pi+','+ii+')" style="background:none;border:none;color:#dc2626;font-size:17px;cursor:pointer;padding:2px 4px;line-height:1" title="Remove">×</button>'
       +'</div>';
     });
-
-    /* add product dropdown */
     var usedIds=po.items.map(function(it){return it.sid;});
     var addOpts=D.stock.filter(function(s){return !s.archived&&usedIds.indexOf(s.id)<0;})
       .map(function(s){return '<option value="'+s.id+'">'+esc(s.name)+' ('+rm(s.sell)+')</option>';}).join('');
-
     html+='<div style="border:1px solid #e5e5e5;border-radius:10px;margin-bottom:10px;overflow:hidden">'
-      /* header — editable name */
       +'<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:#fafafa;border-bottom:1px solid #f0f0f0">'
         +'<div style="flex:1;min-width:0;margin-right:10px">'
           +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'
-            +'<input id="pname-'+pi+'" value="'+esc(po.name)+'" onchange="ofPN('+pi+',this.value)" style="font-size:14px;font-weight:700;border:none;border-bottom:1.5px solid #e5e5e5;background:transparent;outline:none;padding:2px 0;width:100%;min-width:0;font-family:inherit" title="Click to edit name">'
+            +'<input id="pname-'+pi+'" value="'+esc(po.name)+'" onchange="ofPN('+pi+',this.value)" style="font-size:14px;font-weight:700;border:none;border-bottom:1.5px solid #e5e5e5;background:transparent;outline:none;padding:2px 0;width:100%;font-family:inherit">'
             +'<span style="font-size:10px;color:#aaa;flex-shrink:0">✏️</span>'
           +'</div>'
           +'<div style="font-size:12px;color:#555">'+custLabel+'</div>'
@@ -4921,17 +4961,11 @@ function ofRefreshPending(){
           +'<button onclick="ofPD('+pi+')" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">🗑 Remove</button>'
         +'</div>'
       +'</div>'
-      /* items */
       +'<div style="padding:2px 14px 4px">'+rows+'</div>'
-      /* add product */
-      +(addOpts
-        ?'<div style="display:flex;gap:8px;align-items:center;padding:9px 14px;background:#f8f9ff;border-top:1px solid #eef0f8">'
-          +'<select id="padd-'+pi+'" style="flex:1;font-size:12px;padding:6px 8px;border:1px solid #dbeafe;border-radius:6px">'
-            +'<option value="">+ Add a product…</option>'+addOpts+'</select>'
+      +(addOpts?'<div style="display:flex;gap:8px;align-items:center;padding:9px 14px;background:#f8f9ff;border-top:1px solid #eef0f8">'
+          +'<select id="padd-'+pi+'" style="flex:1;font-size:12px;padding:6px 8px;border:1px solid #dbeafe;border-radius:6px"><option value="">+ Add a product…</option>'+addOpts+'</select>'
           +'<button onclick="ofPA('+pi+')" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">Add</button>'
-        +'</div>'
-        :'')
-      /* footer */
+        +'</div>':'')
       +'<div style="padding:7px 14px 10px;border-top:1px solid #f0f0f0">'
         +(po.remarks?'<div style="font-size:11px;color:#d97706;margin-bottom:3px">📝 '+esc(po.remarks)+'</div>':'')
         +'<div style="font-size:10px;color:#bbb">Submitted '+new Date(po.submittedAt).toLocaleString()+'</div>'
@@ -4940,6 +4974,7 @@ function ofRefreshPending(){
   });
   list.innerHTML=html;
 }
+
 
 /* pending order helpers */
 function ofPQ(pi,ii,delta){ /* change qty */
@@ -5031,6 +5066,14 @@ function ofImportAll(){
   }
 
   ofSave(OF.PEND_KEY,[]);
+
+  /* mark rows as imported in Google Sheet */
+  var sheetRows=pending.filter(function(po){return po.sheetRow;}).map(function(po){return po.sheetRow;});
+  if(sheetRows.length&&OF.SCRIPT_URL){
+    fetch(OF.SCRIPT_URL+'?action=markimported&rows='+sheetRows.join(','))
+      .catch(function(){}); /* fire and forget */
+  }
+
   ofRefreshPending();
   renderDash();renderIntM();renderInt();
   toast(created+' order'+(created!==1?'s':'')+' imported for '+date+' ✓');
