@@ -614,7 +614,23 @@ textarea{resize:vertical;min-height:60px}
   <!-- TAB 5: REPORTS -->
   <div id="sec-reports" class="sec pad">
 
-    <!-- Date range filter -->
+    <!-- ── PRODUCT SALES LOOKUP ── -->
+    <div class="card cp" style="margin-bottom:20px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px">🔍 Product sales lookup</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px">
+        <div>
+          <label>Product</label>
+          <select id="plu-product" style="width:220px">
+            <option value="">— select a product —</option>
+          </select>
+        </div>
+        <div><label>From</label><input type="date" id="plu-from" style="width:145px"></div>
+        <div><label>To</label><input type="date" id="plu-to" style="width:145px"></div>
+        <button class="btn btn-p" onclick="renderPLU()" style="height:36px;align-self:flex-end">Search</button>
+        <button class="btn btn-o" onclick="clearPLU()" style="height:36px;align-self:flex-end">Clear</button>
+      </div>
+      <div id="plu-result"></div>
+    </div>
     <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:20px;flex-wrap:wrap">
       <div><label>From</label><input type="date" id="rpt-from" style="width:150px"></div>
       <div><label>To</label><input type="date" id="rpt-to" style="width:150px"></div>
@@ -973,7 +989,7 @@ function show(tab){
   if(tab==='internal'){popCust();renderIntM();renderInt();initOForm()}
   if(tab==='stock'){closeAmend();renderStk()}
   if(tab==='customers'){closeAmend();renderCustList();if(selCust)showProfile(selCust)}
-  if(tab==='reports') renderReports();
+  if(tab==='reports') {renderReports();populatePLU();}
   if(tab==='summary') renderSummary();
   if(tab==='delivery'){renderRunSelector();renderDelivery();}
   if(tab==='insights') renderInsights();
@@ -5121,6 +5137,158 @@ function ofImportAll(){
   ofRefreshPending();
   renderDash();renderIntM();renderInt();
   toast(created+' order'+(created!==1?'s':'')+' imported for '+date+' ✓');
+}
+
+/* ════════════════════════════════════════
+   PRODUCT LOOKUP (Reports tab)
+   ════════════════════════════════════════ */
+function populatePLU(){
+  var sel=document.getElementById('plu-product');
+  if(!sel) return;
+  var current=sel.value;
+  var sorted=D.stock.filter(function(s){return !s.archived;})
+    .slice().sort(function(a,b){return (a.cat||'').localeCompare(b.cat||'')||a.name.localeCompare(b.name,'zh');});
+  var html='<option value="">— select a product —</option>';
+  var lastCat='';
+  sorted.forEach(function(s){
+    if((s.cat||'Others')!==lastCat){
+      if(lastCat) html+='</optgroup>';
+      lastCat=s.cat||'Others';
+      html+='<optgroup label="'+esc(lastCat)+'">';
+    }
+    html+='<option value="'+s.id+'"'+(current==s.id?' selected':'')+'>'+esc(s.name)+'</option>';
+  });
+  if(lastCat) html+='</optgroup>';
+  sel.innerHTML=html;
+}
+
+function clearPLU(){
+  document.getElementById('plu-product').value='';
+  document.getElementById('plu-from').value='';
+  document.getElementById('plu-to').value='';
+  document.getElementById('plu-result').innerHTML='';
+}
+
+function renderPLU(){
+  var sid=parseInt(document.getElementById('plu-product').value);
+  var from=document.getElementById('plu-from').value;
+  var to=document.getElementById('plu-to').value;
+  var el=document.getElementById('plu-result');
+
+  if(!sid){el.innerHTML='<div class="empty">Please select a product.</div>';return;}
+
+  var stk=D.stock.find(function(s){return s.id===sid;});
+  if(!stk){el.innerHTML='<div class="empty">Product not found.</div>';return;}
+
+  /* filter orders */
+  var matchedOrders=[];
+  D.orders.forEach(function(o){
+    if(from&&o.date<from) return;
+    if(to&&o.date>to) return;
+    var item=o.items.find(function(i){return i.s===sid;});
+    if(item){
+      matchedOrders.push({order:o,item:item});
+    }
+  });
+
+  if(!matchedOrders.length){
+    el.innerHTML='<div class="empty">No orders found for '+esc(stk.name)+(from||to?' in selected date range':'')+'.</div>';
+    return;
+  }
+
+  /* aggregate stats */
+  var totalQty=0,totalRev=0,totalCost=0;
+  var custMap={};
+  var monthMap={};
+  matchedOrders.forEach(function(r){
+    var qty=r.item.q,rev=r.item.sp*qty,cost=r.item.cp*qty;
+    totalQty+=qty;totalRev+=rev;totalCost+=cost;
+    var cid=r.order.cid;
+    var cname=(D.customers.find(function(c){return c.id===cid;})||{name:'Unknown'}).name;
+    if(!custMap[cid]) custMap[cid]={name:cname,qty:0,rev:0};
+    custMap[cid].qty+=qty;custMap[cid].rev+=rev;
+    var m=r.order.date.slice(0,7);
+    if(!monthMap[m]) monthMap[m]={qty:0,rev:0};
+    monthMap[m].qty+=qty;monthMap[m].rev+=rev;
+  });
+  var totalProfit=totalRev-totalCost;
+  var margin=totalRev>0?totalProfit/totalRev*100:0;
+  var uniqueCusts=Object.keys(custMap).length;
+
+  /* render */
+  var html='';
+  /* summary strip */
+  html+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">'
+    +mkmc('Units sold',totalQty.toFixed(1),'')
+    +mkmc('Revenue',rm(totalRev),'bl')
+    +mkmc('Profit',rm(totalProfit),totalProfit>=0?'gn':'wn')
+    +mkmc('Margin',margin.toFixed(1)+'%',margin>=20?'gn':margin>=10?'wn':'rn')
+  +'</div>';
+
+  /* monthly breakdown */
+  var months=Object.keys(monthMap).sort();
+  if(months.length>1){
+    html+='<div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px">Monthly breakdown</div>';
+    html+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">';
+    months.forEach(function(m){
+      var mo=monthMap[m];
+      html+='<div style="background:#f5f5f5;border-radius:8px;padding:8px 12px;text-align:center;min-width:80px">'
+        +'<div style="font-size:11px;color:#888;margin-bottom:3px">'+m+'</div>'
+        +'<div style="font-size:14px;font-weight:700">'+mo.qty.toFixed(1)+' units</div>'
+        +'<div style="font-size:11px;color:#16a34a">'+rm(mo.rev)+'</div>'
+      +'</div>';
+    });
+    html+='</div>';
+  }
+
+  /* top customers */
+  var custList=Object.values(custMap).sort(function(a,b){return b.qty-a.qty;});
+  html+='<div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px">Who bought it ('+uniqueCusts+' customers)</div>';
+  html+='<div style="overflow-x:auto"><table style="width:100%;min-width:340px;table-layout:auto"><thead><tr>'
+    +'<th>Customer</th><th style="text-align:right;width:80px">Units</th>'
+    +'<th style="text-align:right;width:90px">Revenue</th><th style="text-align:right;width:90px">Profit</th>'
+  +'</tr></thead><tbody>';
+  custList.forEach(function(c){
+    var cp=c.rev-(c.qty*(stk.cost||0));
+    html+='<tr><td>'+esc(c.name)+'</td>'
+      +'<td style="text-align:right">'+c.qty.toFixed(1)+'</td>'
+      +'<td style="text-align:right">'+rm(c.rev)+'</td>'
+      +'<td style="text-align:right;color:#16a34a">'+rm(cp)+'</td>'
+    +'</tr>';
+  });
+  html+='</tbody></table></div>';
+
+  /* order list */
+  html+='<div style="font-size:12px;font-weight:600;color:#555;margin:14px 0 8px">All orders ('+matchedOrders.length+')</div>';
+  html+='<div style="overflow-x:auto"><table style="width:100%;min-width:340px;table-layout:auto"><thead><tr>'
+    +'<th>Date</th><th>Customer</th><th style="text-align:right;width:70px">Qty</th>'
+    +'<th style="text-align:right;width:80px">Unit price</th><th style="text-align:right;width:80px">Total</th>'
+    +'<th style="width:80px">Status</th>'
+  +'</tr></thead><tbody>';
+  matchedOrders.sort(function(a,b){return b.order.date.localeCompare(a.order.date);})
+  .forEach(function(r){
+    var cname=(D.customers.find(function(c){return c.id===r.order.cid;})||{name:'?'}).name;
+    html+='<tr>'
+      +'<td>'+r.order.date+'</td>'
+      +'<td>'+esc(cname)+'</td>'
+      +'<td style="text-align:right">'+r.item.q.toFixed(1)+'</td>'
+      +'<td style="text-align:right">'+rm(r.item.sp)+'</td>'
+      +'<td style="text-align:right">'+rm(r.item.sp*r.item.q)+'</td>'
+      +'<td><span class="badge '+bc(r.order.status)+'">'+r.order.status+'</span></td>'
+    +'</tr>';
+  });
+  html+='</tbody></table></div>';
+
+  el.innerHTML=html;
+}
+
+/* mini metric card helper for PLU */
+function mkmc(label,val,cls){
+  var col=cls==='bl'?'#1d4ed8':cls==='gn'?'#16a34a':cls==='wn'?'#d97706':cls==='rn'?'#dc2626':'#1a1a1a';
+  return '<div style="background:#f5f5f5;border-radius:8px;padding:10px 12px">'
+    +'<div style="font-size:11px;color:#888;margin-bottom:3px">'+label+'</div>'
+    +'<div style="font-size:18px;font-weight:700;color:'+col+'">'+val+'</div>'
+  +'</div>';
 }
 
 /* boot */
