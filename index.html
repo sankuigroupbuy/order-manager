@@ -2446,6 +2446,14 @@ function showProfile(cid){
   var unpaidAmt=ords.filter(function(o){return o.status!=='paid'}).reduce(function(s,o){return s+oSell(o)},0);
   var lastDate=ords.length?ords[0].date:'—';
 
+  /* group orders by date */
+  var byDate={};
+  ords.forEach(function(o){
+    if(!byDate[o.date]) byDate[o.date]=[];
+    byDate[o.date].push(o);
+  });
+  var dates=Object.keys(byDate).sort(function(a,b){return b.localeCompare(a)});
+
   var html=
     '<div style="background:#fff;border:1px solid #e5e5e5;border-radius:10px;overflow:hidden;margin-bottom:18px">'+
       '<div class="p-banner"></div>'+
@@ -2474,32 +2482,78 @@ function showProfile(cid){
 
   if(!ords.length){html+='<div class="empty">No orders yet for this customer.</div>';}
   else{
-    html+='<div class="tl">';
-    ords.forEach(function(o,idx){
-      var sell=oSell(o);
-      var dotColor=o.status==='paid'?'#16a34a':o.status==='partial'?'#1d4ed8':'#d97706';
-      var itemPills=o.items.map(function(i){var p=sp(i.s);return p?'<span style="display:inline-block;background:#f5f5f5;border-radius:4px;padding:1px 7px;margin:1px 3px 1px 0;font-size:11px">'+esc(p.name)+' &times;'+i.q+'</span>':''}).filter(Boolean).join('');
-      html+='<div class="tl-row">'+
-        '<div class="tl-spine">'+
-          '<div class="tl-dot" style="background:'+dotColor+'"></div>'+
-          (idx<ords.length-1?'<div class="tl-line"></div>':'')+
-        '</div>'+
-        '<div class="tl-body">'+
-          '<div class="tl-dt">'+o.date+'</div>'+
-          '<div class="tl-head">'+
-            '<span style="font-size:13px;font-weight:600">Order #'+o.id+'</span>'+
-            '<span class="badge '+bc(o.status)+'">'+o.status+'</span>'+
-            '<button class="btn btn-sm '+(o.status==='paid'?'btn-o':'btn-g')+'" style="margin-left:auto;font-size:11px;padding:3px 9px" onclick="togPaidRefresh('+o.id+','+cid+')">'+(o.status==='paid'?'Mark unpaid':'Mark paid')+'</button>'+
+    dates.forEach(function(date){
+      var group=byDate[date];
+      var groupTotal=group.reduce(function(s,o){return s+oSell(o)},0);
+      var groupIds=group.map(function(o){return o.id}).join(',');
+      var allPaid=group.every(function(o){return o.status==='paid'});
+
+      /* date group header with bulk change date button */
+      html+='<div style="background:#f8f9fa;border-bottom:1px solid #f0f0f0;padding:10px 20px;display:flex;align-items:center;justify-content:space-between">'
+        +'<div style="display:flex;align-items:center;gap:10px">'
+          +'<div style="font-size:13px;font-weight:700;color:#1a1a1a">📅 '+date+'</div>'
+          +'<div style="font-size:11px;color:#888">'+group.length+' order'+(group.length!==1?'s':'')+' · '+rm(groupTotal)+'</div>'
+        +'</div>'
+        +'<div style="display:flex;align-items:center;gap:6px" id="dategroup-'+cid+'-'+date.replace(/-/g,'')+'">'
+          +'<button class="btn btn-o btn-sm" style="font-size:11px;padding:3px 9px" onclick="showChangeDatePicker('+cid+',\''+date+'\',\''+groupIds+'\')">📅 Change date</button>'
+        +'</div>'
+      +'</div>';
+
+      /* individual orders in this group */
+      html+='<div class="tl">';
+      group.forEach(function(o,idx){
+        var sell=oSell(o);
+        var dotColor=o.status==='paid'?'#16a34a':o.status==='partial'?'#1d4ed8':'#d97706';
+        var itemPills=o.items.map(function(i){var p=sp(i.s);return p?'<span style="display:inline-block;background:#f5f5f5;border-radius:4px;padding:1px 7px;margin:1px 3px 1px 0;font-size:11px">'+esc(p.name)+' &times;'+i.q+'</span>':''}).filter(Boolean).join('');
+        html+='<div class="tl-row">'+
+          '<div class="tl-spine">'+
+            '<div class="tl-dot" style="background:'+dotColor+'"></div>'+
+            (idx<group.length-1?'<div class="tl-line"></div>':'')+
           '</div>'+
-          '<div style="margin-bottom:6px">'+itemPills+'</div>'+
-          '<div class="tl-amt" style="color:'+(o.status==='paid'?'#16a34a':'#1a1a1a')+'">'+rm(sell)+'</div>'+
-        '</div>'+
-      '</div>';
+          '<div class="tl-body">'+
+            '<div class="tl-head">'+
+              '<span style="font-size:13px;font-weight:600">Order #'+o.id+'</span>'+
+              '<span class="badge '+bc(o.status)+'">'+o.status+'</span>'+
+              '<button class="btn btn-sm '+(o.status==='paid'?'btn-o':'btn-g')+'" style="margin-left:auto;font-size:11px;padding:3px 9px" onclick="togPaidRefresh('+o.id+','+cid+')">'+(o.status==='paid'?'Mark unpaid':'Mark paid')+'</button>'+
+            '</div>'+
+            '<div style="margin-bottom:6px">'+itemPills+'</div>'+
+            '<div class="tl-amt" style="color:'+(o.status==='paid'?'#16a34a':'#1a1a1a')+'">'+rm(sell)+'</div>'+
+          '</div>'+
+        '</div>';
+      });
+      html+='</div>';
     });
-    html+='</div>';
   }
   html+='</div>';
   document.getElementById('cust-right').innerHTML=html;
+}
+
+/* ── show inline date picker for bulk date change ── */
+function showChangeDatePicker(cid,oldDate,orderIdsStr){
+  var key='dategroup-'+cid+'-'+oldDate.replace(/-/g,'');
+  var el=document.getElementById(key);
+  if(!el) return;
+  el.innerHTML=
+    '<div style="display:flex;align-items:center;gap:6px">'
+      +'<input type="date" id="newdate-'+cid+'" value="'+oldDate+'" style="font-size:12px;padding:4px 8px;border:1px solid #e0e0e0;border-radius:6px;outline:none">'
+      +'<button class="btn btn-p btn-sm" style="font-size:11px;padding:3px 9px" onclick="applyBulkDateChange('+cid+',\''+orderIdsStr+'\')">✓ Apply</button>'
+      +'<button class="btn btn-o btn-sm" style="font-size:11px;padding:3px 9px" onclick="showProfile('+cid+')">Cancel</button>'
+    +'</div>';
+}
+
+/* ── apply bulk date change to all orders in group ── */
+function applyBulkDateChange(cid,orderIdsStr){
+  var newDate=document.getElementById('newdate-'+cid).value;
+  if(!newDate){toast('Please select a date');return;}
+  var ids=orderIdsStr.split(',').map(Number);
+  var count=0;
+  D.orders.forEach(function(o){
+    if(ids.indexOf(o.id)>=0){o.date=newDate;count++;}
+  });
+  saveData();
+  showProfile(cid);
+  renderIntM();renderInt();
+  toast(count+' order'+(count!==1?'s':'')+' moved to '+newDate+' ✓');
 }
 function pfFields(c){
   return'<div class="pf"><span class="pfl">Phone</span><span class="pfv">'+(c.phone||'<span style="color:#aaa">Not set</span>')+'</span></div>'+
@@ -4856,50 +4910,40 @@ function ofCopyLink(){
    ════════════════════════════════════════ */
 function ofRefreshPending(){
   var list=document.getElementById('of-pend-list');
-  var badge=document.getElementById('of-pend-badge');
-  var importRow=document.getElementById('of-import-row');
-  var dp=document.getElementById('of-import-date');
-
-  /* show loading state */
   if(list) list.innerHTML='<div class="empty" style="color:#888">Loading orders...</div>';
 
-  var scriptUrl=localStorage.getItem('of_script_url')||'';
-
-  /* try fetching from Apps Script first */
-  var asUrl=OF.SCRIPT_URL+'?action=getorders';
-  fetch(asUrl)
+  fetch(OF.SCRIPT_URL+'?action=getorders')
     .then(function(r){return r.json();})
     .then(function(resp){
-      if(resp.status==='ok'&&resp.orders){
-        /* merge sheet orders into localStorage pending */
+      if(resp.status==='ok'&&resp.orders&&resp.orders.length){
+        /* use sheetRow as unique key — rebuild pending from sheet every time */
         var existing=ofRead(OF.PEND_KEY)||[];
-        var existingNames=existing.map(function(o){return o.name+o.submittedAt;});
+        var existingRows=existing.map(function(o){return o.sheetRow;}).filter(Boolean);
+
         var newOrders=resp.orders.filter(function(o){
-          return existingNames.indexOf(o.name+(o.submittedAt||''))<0;
+          return existingRows.indexOf(o.rowIndex)<0;
         }).map(function(o){
-          /* convert sheet format back to pending format */
           return {
-            name:o.name,
-            items:o.items.map(function(it){
-              /* try to match name back to stock ID */
+            name:        o.name,
+            items:       o.items.map(function(it){
               var stk=D.stock.find(function(s){return s.name===it.name;});
               return stk?{sid:stk.id,qty:it.qty}:{sid:0,qty:it.qty,_name:it.name};
             }),
-            remarks:o.remarks||'',
-            submittedAt:o.submittedAt||new Date().toISOString(),
-            sheetRow:o.rowIndex
+            remarks:     o.remarks||'',
+            submittedAt: o.submittedAt||new Date().toISOString(),
+            sheetRow:    o.rowIndex
           };
         });
+
         if(newOrders.length>0){
           var merged=existing.concat(newOrders);
           ofSave(OF.PEND_KEY,merged);
-          toast(newOrders.length+' new order'+(newOrders.length!==1?'s':'')+' fetched from Sheet ✓');
+          toast(newOrders.length+' new order'+(newOrders.length!==1?'s':'')+' fetched ✓');
         }
       }
       renderPendingList();
     })
     .catch(function(){
-      /* Apps Script unavailable — use localStorage only */
       renderPendingList();
     });
 }
