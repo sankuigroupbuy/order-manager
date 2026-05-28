@@ -852,11 +852,13 @@ textarea{resize:vertical;min-height:60px}
       <div style="margin-left:auto;display:flex;gap:4px" id="dv-view-toggle">
         <button id="dv-btn-list" onclick="setDvView('list')" class="btn btn-p btn-sm" style="font-size:12px">&#9776; List</button>
         <button id="dv-btn-board" onclick="setDvView('board')" class="btn btn-o btn-sm" style="font-size:12px">&#9638; Board</button>
+        <button id="dv-btn-product" onclick="setDvView('product')" class="btn btn-o btn-sm" style="font-size:12px">&#128230; By Product</button>
       </div>
     </div>
 
     <div id="dv-content"></div>
     <div id="dv-board-content" style="display:none"></div>
+    <div id="dv-product-content" style="display:none"></div>
 
   </div>
 
@@ -3462,8 +3464,10 @@ function renderDelivery(){
   if(window.innerWidth<=768 && dvView==='board') dvView='list';
   var rid=parseInt(document.getElementById('dv-run-sel').value);
   var content=document.getElementById('dv-content');
+  document.getElementById('dv-product-content').style.display='none';
   document.getElementById('dv-board-content').style.display=dvView==='board'?'block':'none';
   if(dvView==='board'){content.style.display='none';renderDeliveryBoard();return;}
+  if(dvView==='product'){content.style.display='none';document.getElementById('dv-product-content').style.display='block';renderDeliveryByProduct();return;}
 
   /* ── Mobile delivery view ── */
   if(isMob()){
@@ -3660,9 +3664,119 @@ function setDvView(v){
   dvView=v;
   document.getElementById('dv-btn-list').className='btn btn-sm '+(v==='list'?'btn-p':'btn-o');
   document.getElementById('dv-btn-board').className='btn btn-sm '+(v==='board'?'btn-p':'btn-o');
+  document.getElementById('dv-btn-product').className='btn btn-sm '+(v==='product'?'btn-p':'btn-o');
   document.getElementById('dv-content').style.display=v==='list'?'block':'none';
   document.getElementById('dv-board-content').style.display=v==='board'?'block':'none';
+  document.getElementById('dv-product-content').style.display=v==='product'?'block':'none';
   if(v==='board') renderDeliveryBoard();
+  if(v==='product') renderDeliveryByProduct();
+}
+
+function renderDeliveryByProduct(){
+  var wrap=document.getElementById('dv-product-content');
+  var rid=parseInt(document.getElementById('dv-run-sel').value);
+  if(!rid){wrap.innerHTML='<div class="empty" style="padding:40px">Select or create a delivery run above.</div>';return;}
+  var run=D.runs.find(function(r){return r.id===rid;});
+  if(!run){wrap.innerHTML='<div class="empty">Run not found.</div>';return;}
+
+  /* build product→customers map using ALL orders on this run date */
+  var prodMap={};/* sid → {name, unit, sell, customers:[{cid,name,qty,status}]} */
+  var totalByProd={};/* sid → total qty */
+
+  run.entries.forEach(function(entry){
+    var custOrders=D.orders.filter(function(o){return o.cid===entry.cid&&o.date===run.date;});
+    custOrders.forEach(function(o){
+      o.items.forEach(function(item){
+        var p=sp(item.s);if(!p)return;
+        if(!prodMap[item.s]){
+          prodMap[item.s]={name:p.name,unit:p.unit||'',sell:p.sell,customers:[]};
+          totalByProd[item.s]=0;
+        }
+        totalByProd[item.s]=parseFloat((totalByProd[item.s]+item.q).toFixed(2));
+        /* check if customer already added for this product */
+        var existing=prodMap[item.s].customers.find(function(c){return c.cid===entry.cid;});
+        if(existing){
+          existing.qty=parseFloat((existing.qty+item.q).toFixed(2));
+        } else {
+          var c=cp(entry.cid);
+          prodMap[item.s].customers.push({
+            cid:entry.cid,
+            name:c?c.name:'?',
+            phone:c&&c.phone?c.phone:'',
+            qty:item.q,
+            status:entry.dispStatus||'pending'
+          });
+        }
+      });
+    });
+  });
+
+  var prods=Object.keys(prodMap);
+  if(!prods.length){
+    wrap.innerHTML='<div class="empty" style="padding:40px">No orders found for this run date ('+run.date+'). Make sure orders have the same date as the run.</div>';
+    return;
+  }
+
+  /* sort by total qty descending */
+  prods.sort(function(a,b){return totalByProd[b]-totalByProd[a];});
+
+  /* summary bar */
+  var totalCusts=new Set(run.entries.map(function(e){return e.cid;})).size;
+  var confirmed=run.entries.filter(function(e){return e.dispStatus==='confirm';}).length;
+
+  var html=
+    '<div style="background:#f0f4ff;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;gap:24px;flex-wrap:wrap">'+
+      '<div><span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.04em">Run date</span><div style="font-size:14px;font-weight:700;color:#1e3a5f">'+run.date+'</div></div>'+
+      '<div><span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.04em">Products</span><div style="font-size:14px;font-weight:700;color:#1e3a5f">'+prods.length+'</div></div>'+
+      '<div><span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.04em">Customers</span><div style="font-size:14px;font-weight:700;color:#1e3a5f">'+totalCusts+'</div></div>'+
+      '<div><span style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.04em">Confirmed</span><div style="font-size:14px;font-weight:700;color:#16a34a">'+confirmed+'/'+totalCusts+'</div></div>'+
+    '</div>'+
+    '<div style="font-size:11px;color:#aaa;margin-bottom:12px">💡 Use this view to see exactly who ordered each product. Useful when splitting collection across multiple days.</div>';
+
+  prods.forEach(function(sid){
+    var prod=prodMap[sid];
+    var total=totalByProd[sid];
+    var custCount=prod.customers.length;
+    html+=
+      '<div class="card" style="margin-bottom:14px;overflow:hidden">'+
+        '<div style="background:#f8faff;border-bottom:1px solid #e8eef8;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'+
+          '<div>'+
+            '<div style="font-size:15px;font-weight:700;color:#1a1a1a">'+esc(prod.name)+'</div>'+
+            '<div style="font-size:11px;color:#888;margin-top:2px">A$'+prod.sell.toFixed(2)+'/'+( prod.unit||'unit')+' · '+custCount+' customer'+(custCount!==1?'s':'')+' ordered</div>'+
+          '</div>'+
+          '<div style="text-align:right">'+
+            '<div style="font-size:22px;font-weight:700;color:#1e3a5f">'+total+'<span style="font-size:12px;font-weight:400;color:#aaa;margin-left:3px">'+(prod.unit||'units')+'</span></div>'+
+            '<div style="font-size:11px;color:#888">Total to source</div>'+
+          '</div>'+
+        '</div>'+
+        '<table style="width:100%;border-collapse:collapse">'+
+        '<thead><tr style="background:#fafafa">'+
+          '<th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:500;color:#aaa;border-bottom:1px solid #f0f0f0">Customer</th>'+
+          '<th style="padding:8px 16px;text-align:left;font-size:11px;font-weight:500;color:#aaa;border-bottom:1px solid #f0f0f0">Phone</th>'+
+          '<th style="padding:8px 16px;text-align:right;font-size:11px;font-weight:500;color:#aaa;border-bottom:1px solid #f0f0f0">Qty</th>'+
+          '<th style="padding:8px 16px;text-align:right;font-size:11px;font-weight:500;color:#aaa;border-bottom:1px solid #f0f0f0">Subtotal</th>'+
+          '<th style="padding:8px 16px;text-align:center;font-size:11px;font-weight:500;color:#aaa;border-bottom:1px solid #f0f0f0">Status</th>'+
+        '</tr></thead><tbody>'+
+        prod.customers.map(function(c){
+          var sub=c.qty*prod.sell;
+          var stBg=c.status==='confirm'?'#EAF3DE':c.status==='delay'?'#FAEEDA':c.status==='skip'?'#f5f5f5':'#E6F1FB';
+          var stCol=c.status==='confirm'?'#27500A':c.status==='delay'?'#633806':c.status==='skip'?'#aaa':'#0C447C';
+          var stLbl=c.status==='confirm'?'✓ Confirmed':c.status==='delay'?'Delayed':c.status==='skip'?'Skipped':'Pending';
+          return'<tr style="border-bottom:0.5px solid #f5f5f5">'+
+            '<td style="padding:10px 16px;font-weight:600;font-size:13px">'+esc(c.name)+'</td>'+
+            '<td style="padding:10px 16px;color:#888;font-size:12px">'+(c.phone||'—')+'</td>'+
+            '<td style="padding:10px 16px;text-align:right;font-weight:700;font-size:14px">'+c.qty+'</td>'+
+            '<td style="padding:10px 16px;text-align:right;color:#555;font-size:13px">A$'+sub.toFixed(2)+'</td>'+
+            '<td style="padding:10px 16px;text-align:center">'+
+              '<span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;background:'+stBg+';color:'+stCol+'">'+stLbl+'</span>'+
+            '</td>'+
+          '</tr>';
+        }).join('')+
+        '</tbody></table>'+
+      '</div>';
+  });
+
+  wrap.innerHTML=html;
 }
 
 function addDaysStr(dateStr,n){
