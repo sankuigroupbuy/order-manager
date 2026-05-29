@@ -3270,10 +3270,10 @@ function exportSummarySheets(){
   });
   var merged=Object.values(mergedMap).sort(function(a,b){var na=(cp(a.cid)||{name:''}).name;var nb=(cp(b.cid)||{name:''}).name;return na.localeCompare(nb)||a.date.localeCompare(b.date);});
 
-  /* Build rows — Status col (G) will use formula referencing checkbox col (H) */
-  var rows=[['Order by','Product','Unit price (A$)','Qty','Subtotal (A$)','Order date','Status','☑ Mark Paid']];
+  /* Build rows — H=Mark Paid (changes status), I=Collected (green highlight) */
+  var rows=[['Order by','Product','Unit price (A$)','Qty','Subtotal (A$)','Order date','Status','☑ Mark Paid','☑ Collected']];
   var totalRowIdxs=[];
-  var checkboxItemRows=[];/* row indices that need a checkbox */
+  var checkboxItemRows=[];/* row indices that need checkboxes */
   var grandTotal=0;
 
   merged.forEach(function(m,bi){
@@ -3286,18 +3286,18 @@ function exportSummarySheets(){
       var sub=parseFloat((sell*qty).toFixed(2));
       blockTotal+=sub;
       var rowNum=rows.length+1;/* 1-based row number in sheet */
-      /* Status col uses formula: if checkbox ticked → "paid", else keep original status */
+      /* Status col uses formula: if H checkbox ticked → "paid", else original status */
       var statusFormula='=IF(H'+rowNum+'=TRUE,"paid","'+m.status+'")';
       checkboxItemRows.push({ri:rows.length,isPaid:isPaid});
-      rows.push([cname,p.name,sell,qty,sub,m.date,statusFormula,isPaid]);
+      rows.push([cname,p.name,sell,qty,sub,m.date,statusFormula,isPaid,isPaid]);
     });
     grandTotal=parseFloat((grandTotal+blockTotal).toFixed(2));
     totalRowIdxs.push({ri:rows.length,paid:isPaid,total:parseFloat(blockTotal.toFixed(2))});
-    rows.push([cname+' Total','','','',parseFloat(blockTotal.toFixed(2)),'','','']);
-    if(bi<merged.length-1)rows.push(['','','','','','','','']);
+    rows.push([cname+' Total','','','',parseFloat(blockTotal.toFixed(2)),'','','','']);
+    if(bi<merged.length-1)rows.push(['','','','','','','','','']);
   });
-  rows.push(['','','','','','','','']);
-  rows.push(['GRAND TOTAL','','','',grandTotal,'','','']);
+  rows.push(['','','','','','','','','']);
+  rows.push(['GRAND TOTAL','','','',grandTotal,'','','','']);
   var grandIdx=rows.length-1;
 
   var today=new Date().toISOString().split('T')[0];
@@ -3308,34 +3308,44 @@ function exportSummarySheets(){
   }).then(function(r){return r.json();}).then(function(sheet){
     if(sheet.error){toast('Sheets error: '+sheet.error.message);return;}
     var sid=sheet.spreadsheetId;var shid=sheet.sheets[0].properties.sheetId;
-    return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/A1:H'+rows.length+'?valueInputOption=USER_ENTERED',{
+    return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/A1:I'+rows.length+'?valueInputOption=USER_ENTERED',{
       method:'PUT',headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'application/json'},
       body:JSON.stringify({values:rows,majorDimension:'ROWS'})
     }).then(function(){
       var reqs=[];
 
-      /* ── Checkboxes in column H for item rows only ── */
+      /* ── Checkboxes in col H (Mark Paid) and col I (Collected) for item rows ── */
       checkboxItemRows.forEach(function(r){
+        /* H: Mark Paid */
         reqs.push({setDataValidation:{range:{sheetId:shid,startRowIndex:r.ri,endRowIndex:r.ri+1,startColumnIndex:7,endColumnIndex:8},
+          rule:{condition:{type:'BOOLEAN'},showCustomUi:true,strict:true}}});
+        /* I: Collected */
+        reqs.push({setDataValidation:{range:{sheetId:shid,startRowIndex:r.ri,endRowIndex:r.ri+1,startColumnIndex:8,endColumnIndex:9},
           rule:{condition:{type:'BOOLEAN'},showCustomUi:true,strict:true}}});
       });
 
-      /* ── Conditional format: row turns GREEN when checkbox ticked (H=TRUE) ── */
+      /* ── Conditional format: row turns GREEN only when col I (Collected) is ticked ── */
       reqs.push({addConditionalFormatRule:{rule:{
-        ranges:[{sheetId:shid,startRowIndex:1,endRowIndex:rows.length,startColumnIndex:0,endColumnIndex:8}],
+        ranges:[{sheetId:shid,startRowIndex:1,endRowIndex:rows.length,startColumnIndex:0,endColumnIndex:9}],
         booleanRule:{
-          condition:{type:'CUSTOM_FORMULA',values:[{userEnteredValue:'=$H1=TRUE'}]},
+          condition:{type:'CUSTOM_FORMULA',values:[{userEnteredValue:'=$I1=TRUE'}]},
           format:{backgroundColor:{red:0.72,green:0.93,blue:0.72},
             textFormat:{foregroundColor:{red:0.1,green:0.35,blue:0.1}}}
         }},index:0}});
 
       /* ── Header row: bold blue ── */
-      reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:0,endRowIndex:1,startColumnIndex:0,endColumnIndex:8},
+      reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:0,endRowIndex:1,startColumnIndex:0,endColumnIndex:9},
         cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:11},backgroundColor:{red:0.85,green:0.89,blue:0.95},horizontalAlignment:'CENTER'}},
         fields:'userEnteredFormat(textFormat,backgroundColor,horizontalAlignment)'}});
 
-      /* ── Header H col: green accent to signal it's interactive ── */
+      /* ── Col H header: blue accent (pay action) ── */
       reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:0,endRowIndex:1,startColumnIndex:7,endColumnIndex:8},
+        cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:11,foregroundColor:{red:0.1,green:0.2,blue:0.6}},
+          backgroundColor:{red:0.85,green:0.90,blue:0.98},horizontalAlignment:'CENTER'}},
+        fields:'userEnteredFormat(textFormat,backgroundColor,horizontalAlignment)'}});
+
+      /* ── Col I header: green accent (collected action) ── */
+      reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:0,endRowIndex:1,startColumnIndex:8,endColumnIndex:9},
         cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:11,foregroundColor:{red:0.1,green:0.4,blue:0.1}},
           backgroundColor:{red:0.85,green:0.95,blue:0.85},horizontalAlignment:'CENTER'}},
         fields:'userEnteredFormat(textFormat,backgroundColor,horizontalAlignment)'}});
@@ -3351,9 +3361,9 @@ function exportSummarySheets(){
         });
       });
 
-      /* ── Pre-tick rows that are already paid ── */
+      /* ── Pre-tick H and I for already-paid rows ── */
       checkboxItemRows.filter(function(r){return r.isPaid;}).forEach(function(r){
-        reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:r.ri,endRowIndex:r.ri+1,startColumnIndex:7,endColumnIndex:8},
+        reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:r.ri,endRowIndex:r.ri+1,startColumnIndex:7,endColumnIndex:9},
           cell:{userEnteredValue:{boolValue:true}},fields:'userEnteredValue'}});
       });
 
@@ -3361,19 +3371,19 @@ function exportSummarySheets(){
       totalRowIdxs.forEach(function(t){
         var bg=t.paid?{red:0.20,green:0.66,blue:0.33}:{red:0.87,green:0.95,blue:0.80};
         var fc=t.paid?{red:1,green:1,blue:1}:{red:0.1,green:0.3,blue:0.1};
-        reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:t.ri,endRowIndex:t.ri+1,startColumnIndex:0,endColumnIndex:8},
+        reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:t.ri,endRowIndex:t.ri+1,startColumnIndex:0,endColumnIndex:9},
           cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:11,foregroundColor:fc},backgroundColor:bg}},
           fields:'userEnteredFormat(textFormat,backgroundColor)'}});
       });
 
       /* ── Grand total: dark blue ── */
-      reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:grandIdx,endRowIndex:grandIdx+1,startColumnIndex:0,endColumnIndex:8},
+      reqs.push({repeatCell:{range:{sheetId:shid,startRowIndex:grandIdx,endRowIndex:grandIdx+1,startColumnIndex:0,endColumnIndex:9},
         cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:12,foregroundColor:{red:1,green:1,blue:1}},backgroundColor:{red:0.12,green:0.23,blue:0.37}}},
         fields:'userEnteredFormat(textFormat,backgroundColor)'}});
 
       /* ── Freeze header, auto resize ── */
       reqs.push({updateSheetProperties:{properties:{sheetId:shid,gridProperties:{frozenRowCount:1}},fields:'gridProperties.frozenRowCount'}});
-      reqs.push({autoResizeDimensions:{dimensions:{sheetId:shid,dimension:'COLUMNS',startIndex:0,endIndex:8}}});
+      reqs.push({autoResizeDimensions:{dimensions:{sheetId:shid,dimension:'COLUMNS',startIndex:0,endIndex:9}}});
 
       return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sid+':batchUpdate',{
         method:'POST',headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'application/json'},
