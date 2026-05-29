@@ -4421,7 +4421,7 @@ var LK={IDLE_MS:15*60*1000,idleTimer:null,barStart:0,barTick:null};
 function lkInit(){
   document.getElementById('lock-screen').style.display='flex';
   document.getElementById('app-wrap').style.display='none';
-  document.getElementById('lk-icon').textContent='🔒';
+  /* logo stays — do not overwrite lk-icon */
   document.getElementById('lk-title').textContent='Order Manager';
   document.getElementById('lk-sub').textContent='Enter the password to continue';
   document.getElementById('lk-input').placeholder='••••••••';
