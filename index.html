@@ -3070,8 +3070,10 @@ function renderSummary(){
         ex.q=parseFloat((ex.q+it.q).toFixed(2));
         ex.refs.push({oid:o.id,idx:idx});
         if(it.collected) ex.collected=true;
+        /* if any ref order is unpaid, mark item as unpaid */
+        if(o.status!=='paid') ex.itemPaid=false;
       } else {
-        mergedMap[key].items.push({s:it.s,q:it.q,sp:it.sp,cp:it.cp,refs:[{oid:o.id,idx:idx}],collected:!!it.collected});
+        mergedMap[key].items.push({s:it.s,q:it.q,sp:it.sp,cp:it.cp,refs:[{oid:o.id,idx:idx}],collected:!!it.collected,itemPaid:o.status==='paid'});
       }
     });
   });
@@ -3119,7 +3121,11 @@ function renderSummary(){
       var collectBtn=it.collected
         ?'<button onclick="sumToggleCollected(\''+refsJson+'\')" style="padding:3px 10px;font-size:11px;font-weight:700;border:none;border-radius:6px;background:#16a34a;color:#fff;cursor:pointer;white-space:nowrap">✓ Collected</button>'
         :'<button onclick="sumToggleCollected(\''+refsJson+'\')" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#888;cursor:pointer;white-space:nowrap">Collect</button>';
-      var collectedBg=it.collected?(isPaid?'background:#dcfce7;':'background:#f0fdf4;'):rowBg;
+      /* per-item payment badge — uses itemPaid tracked per individual order */
+      var itemPayBadge=it.itemPaid
+        ?'<span style="display:inline-block;padding:2px 9px;font-size:11px;font-weight:700;border-radius:99px;background:#16a34a;color:#fff">paid</span>'
+        :'<span style="display:inline-block;padding:2px 9px;font-size:11px;font-weight:600;border-radius:99px;background:#fee2e2;color:#b91c1c">unpaid</span>';
+      var collectedBg=it.collected?(it.itemPaid?'background:#dcfce7;':'background:#f0fdf4;'):(it.itemPaid?'background:#f0fdf4;':'');
       html+=
         '<tr style="'+collectedBg+'">'+
           '<td style="color:#555">'+esc(cname)+'</td>'+
@@ -3128,7 +3134,7 @@ function renderSummary(){
           '<td class="num">'+parseFloat(it.q).toFixed(2)+'</td>'+
           '<td class="num">'+sub.toFixed(2)+'</td>'+
           '<td style="text-align:center;padding:4px 6px">'+collectBtn+'</td>'+
-          '<td style="text-align:center;padding:4px 6px">'+payBadge+'</td>'+
+          '<td style="text-align:center;padding:4px 6px">'+itemPayBadge+'</td>'+
         '</tr>';
     });
 
