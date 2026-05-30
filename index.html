@@ -3061,14 +3061,17 @@ function renderSummary(){
   var mergedMap={};/* key: cid+'|'+date */
   ords.forEach(function(o){
     var key=o.cid+'|'+o.date;
-    if(!mergedMap[key]) mergedMap[key]={cid:o.cid,date:o.date,items:[],status:o.status};
-    o.items.forEach(function(it){
-      /* dedup same stock item — add qty if already present */
+    if(!mergedMap[key]) mergedMap[key]={cid:o.cid,date:o.date,items:[],status:o.status,oids:[]};
+    mergedMap[key].oids.push(o.id);
+    o.items.forEach(function(it,idx){
+      /* dedup same stock item — add qty if already present, track oid+idx for collected */
       var ex=mergedMap[key].items.find(function(x){return x.s===it.s&&(x.sp||0)===(it.sp||0);});
       if(ex){
         ex.q=parseFloat((ex.q+it.q).toFixed(2));
+        ex.refs.push({oid:o.id,idx:idx});
+        if(it.collected) ex.collected=true;
       } else {
-        mergedMap[key].items.push({s:it.s,q:it.q,sp:it.sp,cp:it.cp});
+        mergedMap[key].items.push({s:it.s,q:it.q,sp:it.sp,cp:it.cp,refs:[{oid:o.id,idx:idx}],collected:!!it.collected});
       }
     });
   });
@@ -3089,7 +3092,8 @@ function renderSummary(){
       '<th class="num" style="width:96px">Unit price</th>'+
       '<th class="num" style="width:60px">Qty</th>'+
       '<th class="num" style="width:96px">Subtotal</th>'+
-      '<th style="width:100px;text-align:center">Collected</th>'+
+      '<th style="width:110px;text-align:center">Collected</th>'+
+      '<th style="width:100px;text-align:center">Payment</th>'+
     '</tr></thead><tbody>';
 
   var grandTotal=0;
@@ -3100,6 +3104,9 @@ function renderSummary(){
     var blockTotal=0;
     var isPaid=m.status==='paid';
     var rowBg=isPaid?'background:#f0fdf4;':'';
+    var payBadge=isPaid
+      ?'<span style="display:inline-block;padding:2px 9px;font-size:11px;font-weight:700;border-radius:99px;background:#16a34a;color:#fff">paid</span>'
+      :'<span style="display:inline-block;padding:2px 9px;font-size:11px;font-weight:600;border-radius:99px;background:#fee2e2;color:#b91c1c">unpaid</span>';
 
     m.items.forEach(function(it){
       var p=sp(it.s);
@@ -3107,14 +3114,21 @@ function renderSummary(){
       var sell=it.sp!=null?it.sp:p.sell;
       var sub=sell*it.q;
       blockTotal+=sub;
+      /* per-item collected button */
+      var refsJson=encodeURIComponent(JSON.stringify(it.refs));
+      var collectBtn=it.collected
+        ?'<button onclick="sumToggleCollected(\''+refsJson+'\')" style="padding:3px 10px;font-size:11px;font-weight:700;border:none;border-radius:6px;background:#16a34a;color:#fff;cursor:pointer;white-space:nowrap">✓ Collected</button>'
+        :'<button onclick="sumToggleCollected(\''+refsJson+'\')" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#888;cursor:pointer;white-space:nowrap">Collect</button>';
+      var collectedBg=it.collected?(isPaid?'background:#dcfce7;':'background:#f0fdf4;'):rowBg;
       html+=
-        '<tr style="'+rowBg+'">'+
+        '<tr style="'+collectedBg+'">'+
           '<td style="color:#555">'+esc(cname)+'</td>'+
           '<td>'+esc(p.name)+'</td>'+
           '<td class="num">'+sell.toFixed(2)+'</td>'+
           '<td class="num">'+parseFloat(it.q).toFixed(2)+'</td>'+
           '<td class="num">'+sub.toFixed(2)+'</td>'+
-          '<td></td>'+
+          '<td style="text-align:center;padding:4px 6px">'+collectBtn+'</td>'+
+          '<td style="text-align:center;padding:4px 6px">'+payBadge+'</td>'+
         '</tr>';
     });
 
@@ -3127,6 +3141,7 @@ function renderSummary(){
         '<td colspan="4" style="text-align:right;padding-right:14px;font-weight:700;color:#1a1a1a">'+esc(cname)+' total</td>'+
         '<td class="num" style="font-weight:700">'+blockTotal.toFixed(2)+'</td>'+
         '<td style="text-align:center;padding:6px 8px">'+tickBtn+'</td>'+
+        '<td></td>'+
       '</tr>';
   });
 
@@ -3134,6 +3149,7 @@ function renderSummary(){
     '<tr class="total-row">'+
       '<td colspan="4" style="text-align:right;padding-right:14px">Grand Total</td>'+
       '<td class="num">'+grandTotal.toFixed(2)+'</td>'+
+      '<td></td>'+
       '<td></td>'+
     '</tr>';
 
@@ -3252,6 +3268,21 @@ function sumTogglePaid(cid,date){
   orders.forEach(function(o){o.status=allPaid?'unpaid':'paid';});
   saveData();renderSummary();renderDash();
   toast(allPaid?'Marked unpaid':'✓ Marked as paid');
+}
+
+/* ── toggle collected on a specific item (refs = [{oid,idx},...]) ── */
+function sumToggleCollected(refsEncoded){
+  var refs=JSON.parse(decodeURIComponent(refsEncoded));
+  /* check current state from first ref */
+  var firstOrder=D.orders.find(function(o){return o.id===refs[0].oid;});
+  if(!firstOrder) return;
+  var currentlyCollected=!!firstOrder.items[refs[0].idx].collected;
+  refs.forEach(function(r){
+    var o=D.orders.find(function(x){return x.id===r.oid;});
+    if(o&&o.items[r.idx]) o.items[r.idx].collected=!currentlyCollected;
+  });
+  saveData();renderSummary();
+  toast(!currentlyCollected?'✓ Item collected':'Unmarked');
 }
 
 function exportSummarySheets(){
