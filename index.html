@@ -3176,8 +3176,8 @@ function renderSummary(){
       blockTotal+=sub;
       var refsJson=encodeURIComponent(JSON.stringify(it.refs));
       var collectBtn=it.collected
-        ?'<button onclick="sumToggleCollected(''+refsJson+'')" style="padding:6px 14px;font-size:13px;font-weight:700;border:none;border-radius:8px;background:#16a34a;color:#fff;cursor:pointer;min-height:38px">\u2713 Got it</button>'
-        :'<button onclick="sumToggleCollected(''+refsJson+'')" style="padding:6px 14px;font-size:13px;font-weight:600;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;color:#555;cursor:pointer;min-height:38px">Collect</button>';
+        ?'<button onclick="sumToggleCollected(\''+refsJson+'\')" style="padding:6px 14px;font-size:13px;font-weight:700;border:none;border-radius:8px;background:#16a34a;color:#fff;cursor:pointer;min-height:38px">\u2713 Got it</button>'
+        :'<button onclick="sumToggleCollected(\''+refsJson+'\')" style="padding:6px 14px;font-size:13px;font-weight:600;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;color:#555;cursor:pointer;min-height:38px">Collect</button>';
       var itemPayBadge=it.itemPaid
         ?'<span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:99px;background:#dcfce7;color:#15803d">paid</span>'
         :'<span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;background:#fee2e2;color:#b91c1c">unpaid</span>';
@@ -3195,8 +3195,8 @@ function renderSummary(){
         '</div>';
     });
     var payBtn=isPaid
-      ?'<button onclick="sumTogglePaid('+m.cid+',''+m.date+'')" style="flex:1;padding:13px;font-size:15px;font-weight:700;border:none;border-radius:10px;background:#16a34a;color:#fff;cursor:pointer;min-height:48px">\u2713 Paid</button>'
-      :'<button onclick="sumTogglePaid('+m.cid+',''+m.date+'')" style="flex:1;padding:13px;font-size:15px;font-weight:700;border:1.5px solid #d1d5db;border-radius:10px;background:#fff;color:#374151;cursor:pointer;min-height:48px">Mark Paid</button>';
+      ?'<button onclick="sumTogglePaid('+m.cid+',\''+m.date+'\')" style="flex:1;padding:13px;font-size:15px;font-weight:700;border:none;border-radius:10px;background:#16a34a;color:#fff;cursor:pointer;min-height:48px">\u2713 Paid</button>'
+      :'<button onclick="sumTogglePaid('+m.cid+',\''+m.date+'\')" style="flex:1;padding:13px;font-size:15px;font-weight:700;border:1.5px solid #d1d5db;border-radius:10px;background:#fff;color:#374151;cursor:pointer;min-height:48px">Mark Paid</button>';
     var cardBg=isPaid?'#f0fdf4':'#fff';
     var cardBdr=isPaid?'#86efac':'#e5e7eb';
     mhtml+=
