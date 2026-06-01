@@ -3160,7 +3160,69 @@ function renderSummary(){
     '</tr>';
 
   html+='</tbody></table>';
-  document.getElementById('sum-table').innerHTML=html;
+
+  /* ── Mobile card layout (renders instead of table on small screens) ── */
+  var mhtml='';
+  merged.forEach(function(m){
+    var c=cp(m.cid);
+    var cname=c?c.name:'Unknown';
+    var isPaid=m.status==='paid';
+    var blockTotal=0;
+    var itemsHtml='';
+    m.items.forEach(function(it){
+      var p=sp(it.s);if(!p)return;
+      var sell=it.sp!=null?it.sp:p.sell;
+      var sub=sell*it.q;
+      blockTotal+=sub;
+      var refsJson=encodeURIComponent(JSON.stringify(it.refs));
+      var collectBtn=it.collected
+        ?'<button onclick="sumToggleCollected(''+refsJson+'')" style="padding:6px 14px;font-size:13px;font-weight:700;border:none;border-radius:8px;background:#16a34a;color:#fff;cursor:pointer;min-height:38px">\u2713 Got it</button>'
+        :'<button onclick="sumToggleCollected(''+refsJson+'')" style="padding:6px 14px;font-size:13px;font-weight:600;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;color:#555;cursor:pointer;min-height:38px">Collect</button>';
+      var itemPayBadge=it.itemPaid
+        ?'<span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:99px;background:#dcfce7;color:#15803d">paid</span>'
+        :'<span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;background:#fee2e2;color:#b91c1c">unpaid</span>';
+      var itemBg=it.collected?'background:#f0fdf4;':'background:#fafafa;';
+      var itemBdr=it.collected?'#bbf7d0':'#efefef';
+      itemsHtml+=
+        '<div style="'+itemBg+'border-radius:10px;padding:10px 12px;margin-bottom:7px;border:1px solid '+itemBdr+'">'+
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'+
+            '<div style="flex:1;min-width:0">'+
+              '<div style="font-size:14px;font-weight:600;color:#1a1a1a;margin-bottom:3px">'+esc(p.name)+'</div>'+
+              '<div style="font-size:12px;color:#888">'+parseFloat(it.q).toFixed(2)+' x '+rm(sell)+' = <strong style="color:#1a1a1a">'+rm(sub)+'</strong> &nbsp;'+itemPayBadge+'</div>'+
+            '</div>'+
+            '<div style="flex-shrink:0">'+collectBtn+'</div>'+
+          '</div>'+
+        '</div>';
+    });
+    var payBtn=isPaid
+      ?'<button onclick="sumTogglePaid('+m.cid+',''+m.date+'')" style="flex:1;padding:13px;font-size:15px;font-weight:700;border:none;border-radius:10px;background:#16a34a;color:#fff;cursor:pointer;min-height:48px">\u2713 Paid</button>'
+      :'<button onclick="sumTogglePaid('+m.cid+',''+m.date+'')" style="flex:1;padding:13px;font-size:15px;font-weight:700;border:1.5px solid #d1d5db;border-radius:10px;background:#fff;color:#374151;cursor:pointer;min-height:48px">Mark Paid</button>';
+    var cardBg=isPaid?'#f0fdf4':'#fff';
+    var cardBdr=isPaid?'#86efac':'#e5e7eb';
+    mhtml+=
+      '<div style="background:'+cardBg+';border:1.5px solid '+cardBdr+';border-radius:16px;margin-bottom:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.07)">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 14px 11px;border-bottom:1px solid '+(isPaid?'#bbf7d0':'#f3f4f6')+'">'+
+          '<div style="display:flex;align-items:center;gap:10px">'+
+            '<div style="width:40px;height:40px;border-radius:50%;background:'+(isPaid?'#dcfce7':'#eff6ff')+';color:'+(isPaid?'#15803d':'#1d4ed8')+';font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+
+              esc(cname.charAt(0).toUpperCase())+
+            '</div>'+
+            '<div>'+
+              '<div style="font-size:17px;font-weight:800;color:#111">'+esc(cname)+'</div>'+
+              '<div style="font-size:12px;color:#888;margin-top:1px">Total: <strong style="color:#111">'+rm(blockTotal)+'</strong></div>'+
+            '</div>'+
+          '</div>'+
+          (isPaid
+            ?'<span style="font-size:12px;font-weight:700;padding:4px 11px;border-radius:99px;background:#16a34a;color:#fff">\u2713 Paid</span>'
+            :'<span style="font-size:12px;font-weight:600;padding:4px 11px;border-radius:99px;background:#fee2e2;color:#b91c1c">Unpaid</span>')+
+        '</div>'+
+        '<div style="padding:10px 12px 4px">'+itemsHtml+'</div>'+
+        '<div style="padding:8px 12px 13px;display:flex;gap:8px">'+payBtn+'</div>'+
+      '</div>';
+  });
+  mhtml+='<div style="text-align:right;font-size:14px;font-weight:700;color:#374151;padding:6px 2px 32px">Grand Total: <span style="font-size:20px;color:#111;font-weight:800">'+rm(grandTotal)+'</span></div>';
+
+  var isMobile=window.innerWidth<=768;
+  document.getElementById('sum-table').innerHTML=isMobile?mhtml:html;
 }
 
 function exportSummaryExcel(){
@@ -4938,6 +5000,7 @@ window.addEventListener('resize',function(){
     if(tab==='internal') renderInt();
     if(tab==='delivery') renderDelivery();
     if(tab==='insights') renderInsights();
+    if(tab==='summary') renderSummary();
   },250);
 });
 
