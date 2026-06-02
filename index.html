@@ -3397,6 +3397,8 @@ function renderSummary(){
         e.preventDefault();/* stop ghost click on iOS */
       }
     },{passive:false});
+  } else {
+    /* ── Desktop: write the table HTML ── */
     document.getElementById('sum-progress-strip').style.display='none';
     document.getElementById('sum-table').innerHTML=html;
   }
