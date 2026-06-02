@@ -318,9 +318,10 @@ textarea{resize:vertical;min-height:60px}
   .topbar{padding:10px 14px;flex-wrap:nowrap;position:sticky;top:0;z-index:100;gap:8px}
   .topbar-title{font-size:14px}
   .topbar-sub{display:none}
-  #topbar-actions{display:none;flex-direction:row!important;flex-wrap:wrap;gap:6px;position:fixed;top:52px;right:0;left:0;background:#fff;border-bottom:1px solid #e5e5e5;padding:10px 14px;z-index:200;box-shadow:0 4px 12px rgba(0,0,0,.1);align-items:center}
-  #topbar-actions.open{display:flex!important}
-  #topbar-menu-btn{display:flex!important;align-items:center;justify-content:center}
+  #topbar-actions{display:none!important}
+  #topbar-menu-btn{display:none!important}
+  /* on mobile, show only a slim Drive + Lock bar pinned below the tabs */
+  #mob-quickbar{display:flex!important}
 
   /* shell */
   .shell{padding:8px 0!important;max-width:100%!important}
@@ -359,6 +360,12 @@ textarea{resize:vertical;min-height:60px}
   input,select,textarea,button{font-size:16px!important}
   .btn{min-height:44px;padding:10px 16px!important}
   .btn-sm{min-height:40px!important;font-size:13px!important}
+
+  /* mobile quick bar — Drive status + Load + Lock, hidden on desktop */
+  #mob-quickbar{display:none;align-items:center;gap:8px;padding:7px 14px;background:#f8f9fa;border-bottom:1px solid #e5e5e5;font-size:12px;flex-wrap:nowrap;overflow-x:auto}
+  #mob-quickbar .mgd-btn{padding:6px 14px;font-size:12px;font-weight:600;border-radius:8px;border:1px solid #e5e5e5;background:#fff;color:#333;cursor:pointer;white-space:nowrap;min-height:36px}
+  #mob-quickbar .mgd-btn.primary{background:#1e3a5f;color:#fff;border-color:#1e3a5f}
+  #mob-quickbar .mgd-status{font-size:11px;color:#888;white-space:nowrap;flex:1}
 
   /* lock screen */
   .lock-box{padding:28px 20px!important;margin:16px!important;max-width:calc(100% - 32px)!important}
@@ -407,6 +414,9 @@ textarea{resize:vertical;min-height:60px}
   .mob-ins-card{background:#fff;border-radius:12px;padding:13px;margin-bottom:10px;border:0.5px solid #e5e5e5}
   .mob-risk-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f5f5f5}
   .mob-risk-row:last-child{border-bottom:none}
+
+  /* hide desktop table on Customer Receipt on mobile */
+  #dash-tbl{display:none!important}
 
   /* ── MOBILE SUMMARY DELIVERY MODE ── */
   #sum-controls-desktop{display:none!important}
@@ -533,8 +543,8 @@ textarea{resize:vertical;min-height:60px}
       </div>
     </div>
   </div>
-  <!-- hamburger — only shown on mobile -->
-  <button id="topbar-menu-btn" onclick="toggleTopbarMenu()" style="display:none;background:none;border:1px solid #e5e5e5;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:18px;line-height:1">&#9776;</button>
+  <!-- hamburger — hidden, replaced by mob-quickbar -->
+  <button id="topbar-menu-btn" style="display:none"></button>
   <div id="topbar-actions" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <span style="font-size:12px;color:#888" id="save-status"><span class="save-dot"></span>Data saved locally</span>
 
@@ -559,6 +569,14 @@ textarea{resize:vertical;min-height:60px}
   </div>
 </div>
 <div class="shell">
+<!-- mobile quick bar -->
+<div id="mob-quickbar" style="display:none">
+  <span class="mgd-status" id="mob-gd-status">&#9679; Drive not connected</span>
+  <button class="mgd-btn" id="mob-gd-connect" onclick="gdConnect()">Connect Drive</button>
+  <button class="mgd-btn" id="mob-gd-load" onclick="gdLoad()" style="display:none">&#8595; Load</button>
+  <button class="mgd-btn" id="mob-gd-save" onclick="gdSave()" style="display:none">&#8593; Save</button>
+  <button class="mgd-btn" onclick="lkLock()">&#128274; Lock</button>
+</div>
 <div style="background:#fff;border-radius:10px;border:1px solid #e5e5e5">
   <div class="tabs">
     <button class="tab active" onclick="show('receipt')">Customer receipt</button>
@@ -1377,6 +1395,9 @@ function renderDash(){
     document.getElementById('dash-view').appendChild(mobileList);
   }
   if(window.innerWidth<=768){
+    /* hide the desktop table wrapper (querySelector may return null — use id fallback) */
+    var dtbl=document.getElementById('dash-tbl');
+    if(dtbl) dtbl.closest('div').style.display='none';
     if(tableWrap) tableWrap.style.display='none';
     mobileList.style.display='block';
     var mhtml='';
@@ -1422,6 +1443,8 @@ function renderDash(){
     if(!mhtml) mhtml='<div style="text-align:center;padding:30px;color:#aaa;font-size:13px">No customers match.</div>';
     mobileList.innerHTML=mhtml;
   } else {
+    var dtbl2=document.getElementById('dash-tbl');
+    if(dtbl2) dtbl2.closest('div').style.display='';
     if(tableWrap) tableWrap.style.display='';
     mobileList.style.display='none';
   }
@@ -4357,6 +4380,15 @@ function gdShowConnected(){
   document.getElementById('gd-load-btn').style.display='';
   document.getElementById('gd-disconnect-btn').style.display='';
   gdSetStatus('Connected', 'on');
+  /* update mobile quickbar */
+  var mc=document.getElementById('mob-gd-connect');
+  var ml=document.getElementById('mob-gd-load');
+  var ms=document.getElementById('mob-gd-save');
+  var mx=document.getElementById('mob-gd-status');
+  if(mc) mc.style.display='none';
+  if(ml) ml.style.display='';
+  if(ms) ms.style.display='';
+  if(mx){mx.textContent='● Drive connected';mx.style.color='#16a34a';}
 }
 function gdShowDisconnected(){
   document.getElementById('gd-connect-btn').style.display='';
@@ -4364,6 +4396,15 @@ function gdShowDisconnected(){
   document.getElementById('gd-load-btn').style.display='none';
   document.getElementById('gd-disconnect-btn').style.display='none';
   gdSetStatus('Not connected', 'off');
+  /* update mobile quickbar */
+  var mc=document.getElementById('mob-gd-connect');
+  var ml=document.getElementById('mob-gd-load');
+  var ms=document.getElementById('mob-gd-save');
+  var mx=document.getElementById('mob-gd-status');
+  if(mc) mc.style.display='';
+  if(ml) ml.style.display='none';
+  if(ms) ms.style.display='none';
+  if(mx){mx.textContent='○ Drive not connected';mx.style.color='#aaa';}
 }
 
 /* ── Setup modal ── */
