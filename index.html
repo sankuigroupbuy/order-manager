@@ -407,6 +407,68 @@ textarea{resize:vertical;min-height:60px}
   .mob-ins-card{background:#fff;border-radius:12px;padding:13px;margin-bottom:10px;border:0.5px solid #e5e5e5}
   .mob-risk-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f5f5f5}
   .mob-risk-row:last-child{border-bottom:none}
+
+  /* ── MOBILE SUMMARY DELIVERY MODE ── */
+  #sum-controls-desktop{display:none!important}
+  #sum-controls-mobile{display:flex!important}
+  #sum-table-wrap{overflow-x:unset!important}
+
+  /* progress bar strip */
+  #sum-progress-strip{display:flex!important}
+
+  /* delivery cards */
+  .dcard{background:#fff;border:1.5px solid #e8e6e0;border-radius:18px;margin-bottom:14px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.07);transition:border-color .2s,background .2s}
+  .dcard.dc-paid{background:#f0fdf4;border-color:#86efac}
+  .dcard-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 14px 11px;border-bottom:1px solid #f0ede6;gap:10px}
+  .dcard.dc-paid .dcard-hdr{border-bottom-color:#bbf7d0}
+  .dcard-av{width:44px;height:44px;border-radius:50%;background:#eff6ff;color:#1d4ed8;font-size:16px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .dcard.dc-paid .dcard-av{background:#dcfce7;color:#15803d}
+  .dcard-name{font-size:18px;font-weight:800;color:#111;line-height:1.2}
+  .dcard-sub{font-size:12px;color:#999;margin-top:2px}
+  .dcard-badge{display:inline-flex;align-items:center;padding:5px 13px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap;flex-shrink:0}
+  .dcard-badge.paid{background:#16a34a;color:#fff}
+  .dcard-badge.unpaid{background:#fee2e2;color:#b91c1c}
+  .dcard-badge.partial{background:#fef3c7;color:#b45309}
+
+  /* item rows inside card */
+  .dcard-items{padding:10px 12px 4px}
+  .ditem{background:#fafaf7;border:1px solid #eeece6;border-radius:12px;padding:12px 13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;transition:all .2s}
+  .ditem.di-collected{background:#f0fdf4;border-color:#bbf7d0}
+  .ditem-info{flex:1;min-width:0}
+  .ditem-name{font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:4px;line-height:1.3}
+  .ditem-meta{font-size:12px;color:#999;line-height:1.4}
+  .ditem-meta strong{color:#333}
+  .dpill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;margin-left:4px;vertical-align:middle}
+  .dpill-paid{background:#dcfce7;color:#15803d}
+  .dpill-unpaid{background:#fee2e2;color:#b91c1c}
+
+  /* collect button — big tap target */
+  .btn-dcollect{padding:10px 18px;font-size:14px;font-weight:700;border:1.5px solid #d1d5db;border-radius:12px;background:#fff;color:#666;cursor:pointer;min-height:46px;white-space:nowrap;transition:all .15s;font-family:inherit;flex-shrink:0;-webkit-tap-highlight-color:transparent}
+  .btn-dcollect.done{background:#16a34a;color:#fff;border-color:#16a34a}
+
+  /* pay button — full width */
+  .dcard-footer{padding:6px 12px 14px}
+  .btn-dpay{width:100%;padding:15px;font-size:16px;font-weight:800;border:1.5px solid #d1d5db;border-radius:13px;background:#fff;color:#374151;cursor:pointer;min-height:52px;font-family:inherit;transition:all .2s;letter-spacing:.01em;-webkit-tap-highlight-color:transparent}
+  .btn-dpay.paid{background:#16a34a;color:#fff;border-color:#16a34a}
+  .btn-dpay.partial{background:#fef3c7;color:#b45309;border-color:#fcd34d}
+
+  /* collection progress bar */
+  .dcard-prog{padding:4px 13px 10px;display:flex;align-items:center;gap:8px}
+  .dcard-prog-track{flex:1;height:5px;background:#e5e7eb;border-radius:99px;overflow:hidden}
+  .dcard-prog-fill{height:100%;background:#16a34a;border-radius:99px;transition:width .3s}
+  .dcard-prog-txt{font-size:11px;font-weight:600;color:#888;white-space:nowrap}
+
+  /* mobile filter chips */
+  #sum-controls-mobile{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:6px;padding-bottom:2px;margin-bottom:12px}
+  #sum-controls-mobile::-webkit-scrollbar{display:none}
+  .sum-chip{padding:8px 16px;border-radius:99px;font-size:13px;font-weight:600;border:1.5px solid #e5e7eb;background:#fff;color:#888;cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+  .sum-chip.active{background:#1a3a2a;border-color:#1a3a2a;color:#fff}
+  .sum-chip.today{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
+  .sum-chip.today.active{background:#1d4ed8;border-color:#1d4ed8;color:#fff}
+
+  /* grand total */
+  .dcard-grand{text-align:center;padding:12px 0 44px;color:#888;font-size:13px}
+  .dcard-grand-amt{display:block;font-size:26px;font-weight:800;color:#111;margin-top:3px}
 }
 @media print{
   .topbar,.tabs,.sbr,.sec-label,button,.back-btn,.mg,.cg,
@@ -796,8 +858,8 @@ textarea{resize:vertical;min-height:60px}
   <!-- TAB 6: ORDER SUMMARY -->
   <div id="sec-summary" class="sec pad">
 
-    <!-- controls -->
-    <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:20px;flex-wrap:wrap">
+    <!-- DESKTOP controls (hidden on mobile via CSS) -->
+    <div id="sum-controls-desktop" style="display:flex;gap:12px;align-items:flex-end;margin-bottom:20px;flex-wrap:wrap">
       <div>
         <label>Filter by status</label>
         <select id="sum-status" onchange="renderSummary()" style="width:160px">
@@ -821,10 +883,31 @@ textarea{resize:vertical;min-height:60px}
       <button class="btn btn-o" onclick="window.print()" style="height:36px;align-self:flex-end">&#128438; Print</button>
     </div>
 
+    <!-- MOBILE filter chips (shown only on mobile via CSS) -->
+    <div id="sum-controls-mobile" style="display:none">
+      <div class="sum-chip today active" onclick="sumMobFilter('today',this)">📅 Today</div>
+      <div class="sum-chip active" onclick="sumMobFilter('unpaid',this)">Unpaid</div>
+      <div class="sum-chip" onclick="sumMobFilter('all',this)">All</div>
+      <div class="sum-chip" onclick="sumMobFilter('paid',this)">Paid</div>
+    </div>
+
+    <!-- collection progress strip (mobile only) -->
+    <div id="sum-progress-strip" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:10px 14px;margin-bottom:14px;gap:10px;align-items:center">
+      <div style="flex:1">
+        <div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:5px" id="sum-prog-txt">Collected 0 / 0 items</div>
+        <div style="height:6px;background:#dcfce7;border-radius:99px;overflow:hidden">
+          <div id="sum-prog-fill" style="height:100%;background:#16a34a;border-radius:99px;width:0%;transition:width .4s"></div>
+        </div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:11px;color:#888" id="sum-paid-txt">0 / 0 paid</div>
+      </div>
+    </div>
+
     <!-- summary info strip -->
     <div id="sum-info" style="font-size:13px;color:#888;margin-bottom:14px"></div>
 
-    <!-- the table -->
+    <!-- the table / cards -->
     <div id="sum-table-wrap" style="overflow-x:auto">
       <div id="sum-table"></div>
     </div>
@@ -3037,7 +3120,47 @@ function getSummaryOrders(){
   });
 }
 
+/* ── mobile filter chip state ── */
+var sumMobMode = 'unpaid';
+function sumMobFilter(mode, el){
+  sumMobMode = mode;
+  document.querySelectorAll('.sum-chip').forEach(function(c){ c.classList.remove('active'); });
+  el.classList.add('active');
+  renderSummary();
+}
+
+/* ── update progress bar (mobile only) ── */
+function updateSumProgress(ords){
+  var strip = document.getElementById('sum-progress-strip');
+  if(!strip || window.innerWidth > 768){ if(strip) strip.style.display='none'; return; }
+  var seen={}, allItems=0, collectedItems=0;
+  ords.forEach(function(o){
+    seen[o.cid]=seen[o.cid]||{total:0,paid:0};
+    seen[o.cid].total++;
+    if(o.status==='paid') seen[o.cid].paid++;
+    (o.items||[]).forEach(function(it){ if(!it.deducted){ allItems++; if(it.collected) collectedItems++; } });
+  });
+  var cids=Object.keys(seen);
+  var custPaid=cids.filter(function(k){ return seen[k].paid===seen[k].total&&seen[k].total>0; }).length;
+  var pct=allItems>0?Math.round(collectedItems/allItems*100):0;
+  document.getElementById('sum-prog-txt').textContent='Collected '+collectedItems+' / '+allItems+' items ('+pct+'%)';
+  document.getElementById('sum-prog-fill').style.width=pct+'%';
+  document.getElementById('sum-paid-txt').textContent=custPaid+' / '+cids.length+' customers paid';
+  strip.style.display='flex';
+}
+
 function renderSummary(){
+  var isMob=window.innerWidth<=768;
+  if(isMob){
+    var today=new Date().toISOString().split('T')[0];
+    var sv2,sd2='';
+    if(sumMobMode==='today'){sv2='unpaid,partial';sd2=today;}
+    else if(sumMobMode==='unpaid'){sv2='unpaid,partial';}
+    else if(sumMobMode==='paid'){sv2='paid';}
+    else{sv2='all';}
+    document.getElementById('sum-status').value=sv2;
+    document.getElementById('sum-date').value=sd2;
+  }
   var ords=getSummaryOrders();
   var sv=document.getElementById('sum-status').value;
   var sd=document.getElementById('sum-date').value;
@@ -3161,68 +3284,95 @@ function renderSummary(){
 
   html+='</tbody></table>';
 
-  /* ── Mobile card layout (renders instead of table on small screens) ── */
-  var mhtml='';
-  merged.forEach(function(m){
-    var c=cp(m.cid);
-    var cname=c?c.name:'Unknown';
-    var isPaid=m.status==='paid';
-    var blockTotal=0;
-    var itemsHtml='';
-    m.items.forEach(function(it){
-      var p=sp(it.s);if(!p)return;
-      var sell=it.sp!=null?it.sp:p.sell;
-      var sub=sell*it.q;
-      blockTotal+=sub;
-      var refsJson=encodeURIComponent(JSON.stringify(it.refs));
-      var collectBtn=it.collected
-        ?'<button onclick="sumToggleCollected(\''+refsJson+'\')" style="padding:6px 14px;font-size:13px;font-weight:700;border:none;border-radius:8px;background:#16a34a;color:#fff;cursor:pointer;min-height:38px">\u2713 Got it</button>'
-        :'<button onclick="sumToggleCollected(\''+refsJson+'\')" style="padding:6px 14px;font-size:13px;font-weight:600;border:1.5px solid #d1d5db;border-radius:8px;background:#fff;color:#555;cursor:pointer;min-height:38px">Collect</button>';
-      var itemPayBadge=it.itemPaid
-        ?'<span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:99px;background:#dcfce7;color:#15803d">paid</span>'
-        :'<span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;background:#fee2e2;color:#b91c1c">unpaid</span>';
-      var itemBg=it.collected?'background:#f0fdf4;':'background:#fafafa;';
-      var itemBdr=it.collected?'#bbf7d0':'#efefef';
-      itemsHtml+=
-        '<div style="'+itemBg+'border-radius:10px;padding:10px 12px;margin-bottom:7px;border:1px solid '+itemBdr+'">'+
-          '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'+
-            '<div style="flex:1;min-width:0">'+
-              '<div style="font-size:14px;font-weight:600;color:#1a1a1a;margin-bottom:3px">'+esc(p.name)+'</div>'+
-              '<div style="font-size:12px;color:#888">'+parseFloat(it.q).toFixed(2)+' x '+rm(sell)+' = <strong style="color:#1a1a1a">'+rm(sub)+'</strong> &nbsp;'+itemPayBadge+'</div>'+
+  /* ── Mobile card layout (delivery-optimised) ── */
+  var isMobile=window.innerWidth<=768;
+  if(isMobile){
+    updateSumProgress(ords);
+    var mhtml='';
+    merged.forEach(function(m){
+      var c=cp(m.cid);
+      var cname=c?c.name:'Unknown';
+      var init=(cname||'?').trim().split(/\s+/).map(function(w){return w[0];}).join('').toUpperCase().substring(0,2);
+      var isPaid=m.status==='paid';
+      var isPartial=!isPaid&&m.oids.some(function(oid){var o=D.orders.find(function(x){return x.id===oid;});return o&&o.status==='paid';});
+      var blockTotal=0;
+      var itemsHtml='';
+      var itemCount=0,collCount=0;
+      m.items.forEach(function(it){
+        var p=sp(it.s);if(!p)return;
+        var sell=it.sp!=null?it.sp:p.sell;
+        var sub=sell*it.q;
+        blockTotal+=sub;
+        itemCount++;if(it.collected)collCount++;
+        /* store refs as data attribute — avoids all quote-escaping issues */
+        var refsJson=JSON.stringify(it.refs);
+        var payPill=it.itemPaid
+          ?'<span class="dpill dpill-paid">paid</span>'
+          :'<span class="dpill dpill-unpaid">unpaid</span>';
+        var itemId='ditem-'+m.cid+'-'+it.s+'-'+Math.round(sell*100);
+        itemsHtml+=
+          '<div class="ditem'+(it.collected?' di-collected':'')+'" id="'+itemId+'">'+
+            '<div class="ditem-info">'+
+              '<div class="ditem-name">'+esc(p.name)+'</div>'+
+              '<div class="ditem-meta">'+parseFloat(it.q).toFixed(it.q%1?2:0)+' × '+rm(sell)+' = <strong>'+rm(sub)+'</strong>'+payPill+'</div>'+
             '</div>'+
-            '<div style="flex-shrink:0">'+collectBtn+'</div>'+
+            '<button class="btn-dcollect'+(it.collected?' done':'')+'" data-refs="'+esc(refsJson)+'" data-item="'+itemId+'">'+(it.collected?'✓ Got it':'Collect')+'</button>'+
+          '</div>';
+      });
+      var progPct=itemCount>0?Math.round(collCount/itemCount*100):0;
+      var progBar=itemCount>1?
+        '<div class="dcard-prog">'+
+          '<div class="dcard-prog-track"><div class="dcard-prog-fill" style="width:'+progPct+'%"></div></div>'+
+          '<span class="dcard-prog-txt">'+collCount+'/'+itemCount+' collected</span>'+
+        '</div>':'';
+      var badgeCls=isPaid?'paid':(isPartial?'partial':'unpaid');
+      var badgeTxt=isPaid?'✓ Paid':(isPartial?'Partial':'Unpaid');
+      var payCls='btn-dpay'+(isPaid?' paid':(isPartial?' partial':''));
+      var payTxt=isPaid?'✓ Paid':(isPartial?'● Partial':'Mark Paid');
+      mhtml+=
+        '<div class="dcard'+(isPaid?' dc-paid':'')+'" id="dcard-'+m.cid+'">'+
+          '<div class="dcard-hdr">'+
+            '<div style="display:flex;align-items:center;gap:11px;min-width:0">'+
+              '<div class="dcard-av">'+esc(init)+'</div>'+
+              '<div style="min-width:0">'+
+                '<div class="dcard-name">'+esc(cname)+'</div>'+
+                '<div class="dcard-sub">'+rm(blockTotal)+'</div>'+
+              '</div>'+
+            '</div>'+
+            '<span class="dcard-badge '+badgeCls+'" id="dbadge-'+m.cid+'">'+badgeTxt+'</span>'+
+          '</div>'+
+          '<div class="dcard-items">'+itemsHtml+'</div>'+
+          progBar+
+          '<div class="dcard-footer">'+
+            '<button class="'+payCls+'" id="dpaybtn-'+m.cid+'" data-cid="'+m.cid+'" data-date="'+m.date+'">'+payTxt+'</button>'+
           '</div>'+
         '</div>';
     });
-    var payBtn=isPaid
-      ?'<button onclick="sumTogglePaid('+m.cid+',\''+m.date+'\')" style="flex:1;padding:13px;font-size:15px;font-weight:700;border:none;border-radius:10px;background:#16a34a;color:#fff;cursor:pointer;min-height:48px">\u2713 Paid</button>'
-      :'<button onclick="sumTogglePaid('+m.cid+',\''+m.date+'\')" style="flex:1;padding:13px;font-size:15px;font-weight:700;border:1.5px solid #d1d5db;border-radius:10px;background:#fff;color:#374151;cursor:pointer;min-height:48px">Mark Paid</button>';
-    var cardBg=isPaid?'#f0fdf4':'#fff';
-    var cardBdr=isPaid?'#86efac':'#e5e7eb';
-    mhtml+=
-      '<div style="background:'+cardBg+';border:1.5px solid '+cardBdr+';border-radius:16px;margin-bottom:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.07)">'+
-        '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 14px 11px;border-bottom:1px solid '+(isPaid?'#bbf7d0':'#f3f4f6')+'">'+
-          '<div style="display:flex;align-items:center;gap:10px">'+
-            '<div style="width:40px;height:40px;border-radius:50%;background:'+(isPaid?'#dcfce7':'#eff6ff')+';color:'+(isPaid?'#15803d':'#1d4ed8')+';font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+
-              esc(cname.charAt(0).toUpperCase())+
-            '</div>'+
-            '<div>'+
-              '<div style="font-size:17px;font-weight:800;color:#111">'+esc(cname)+'</div>'+
-              '<div style="font-size:12px;color:#888;margin-top:1px">Total: <strong style="color:#111">'+rm(blockTotal)+'</strong></div>'+
-            '</div>'+
-          '</div>'+
-          (isPaid
-            ?'<span style="font-size:12px;font-weight:700;padding:4px 11px;border-radius:99px;background:#16a34a;color:#fff">\u2713 Paid</span>'
-            :'<span style="font-size:12px;font-weight:600;padding:4px 11px;border-radius:99px;background:#fee2e2;color:#b91c1c">Unpaid</span>')+
-        '</div>'+
-        '<div style="padding:10px 12px 4px">'+itemsHtml+'</div>'+
-        '<div style="padding:8px 12px 13px;display:flex;gap:8px">'+payBtn+'</div>'+
-      '</div>';
-  });
-  mhtml+='<div style="text-align:right;font-size:14px;font-weight:700;color:#374151;padding:6px 2px 32px">Grand Total: <span style="font-size:20px;color:#111;font-weight:800">'+rm(grandTotal)+'</span></div>';
-
-  var isMobile=window.innerWidth<=768;
-  document.getElementById('sum-table').innerHTML=isMobile?mhtml:html;
+    mhtml+='<div class="dcard-grand">Grand Total<span class="dcard-grand-amt">'+rm(grandTotal)+'</span></div>';
+    var sumTbl=document.getElementById('sum-table');
+    sumTbl.innerHTML=mhtml;
+    /* wire buttons via event delegation — no inline onclick, works on all iOS browsers */
+    sumTbl.addEventListener('click',function(e){
+      var btn=e.target.closest('button');
+      if(!btn)return;
+      if(btn.dataset.refs!==undefined){
+        e.preventDefault();
+        sumToggleCollected(btn.dataset.refs,btn);
+      } else if(btn.dataset.cid!==undefined){
+        e.preventDefault();
+        sumTogglePaid(parseInt(btn.dataset.cid),btn.dataset.date);
+      }
+    });
+    sumTbl.addEventListener('touchend',function(e){
+      var btn=e.target.closest('button');
+      if(!btn)return;
+      if(btn.dataset.refs!==undefined||btn.dataset.cid!==undefined){
+        e.preventDefault();/* stop ghost click on iOS */
+      }
+    },{passive:false});
+    document.getElementById('sum-progress-strip').style.display='none';
+    document.getElementById('sum-table').innerHTML=html;
+  }
 }
 
 function exportSummaryExcel(){
@@ -3333,25 +3483,55 @@ function exportSummaryExcel(){
 function sumTogglePaid(cid,date){
   var orders=D.orders.filter(function(o){return o.cid===cid&&o.date===date;});
   var allPaid=orders.every(function(o){return o.status==='paid';});
-  orders.forEach(function(o){o.status=allPaid?'unpaid':'paid';});
-  saveData();renderSummary();renderDash();
+  var newStatus=allPaid?'unpaid':'paid';
+  orders.forEach(function(o){o.status=newStatus;});
+  saveData();renderDash();
+  /* mobile: in-place DOM update — no scroll jump */
+  if(window.innerWidth<=768){
+    var card=document.getElementById('dcard-'+cid);
+    var badge=document.getElementById('dbadge-'+cid);
+    var btn=document.getElementById('dpaybtn-'+cid);
+    if(card){
+      card.classList.toggle('dc-paid',!allPaid);
+      var av=card.querySelector('.dcard-av');
+      if(av){av.style.background=!allPaid?'#dcfce7':'#eff6ff';av.style.color=!allPaid?'#15803d':'#1d4ed8';}
+    }
+    if(badge){badge.className='dcard-badge '+(allPaid?'unpaid':'paid');badge.textContent=allPaid?'Unpaid':'✓ Paid';}
+    if(btn){btn.className='btn-dpay'+(allPaid?'':' paid');btn.textContent=allPaid?'Mark Paid':'✓ Paid';}
+    updateSumProgress(getSummaryOrders());
+  } else {
+    renderSummary();
+  }
   toast(allPaid?'Marked unpaid':'✓ Marked as paid');
 }
 
+
 /* ── toggle collected on a specific item (refs = [{oid,idx},...]) ── */
-function sumToggleCollected(refsEncoded){
-  var refs=JSON.parse(decodeURIComponent(refsEncoded));
-  /* check current state from first ref */
+/* ── toggle collected (refs passed as plain JSON string from data attribute) ── */
+function sumToggleCollected(refsJson,btnEl){
+  var refs=JSON.parse(refsJson);
   var firstOrder=D.orders.find(function(o){return o.id===refs[0].oid;});
   if(!firstOrder) return;
   var currentlyCollected=!!firstOrder.items[refs[0].idx].collected;
+  var newVal=!currentlyCollected;
   refs.forEach(function(r){
     var o=D.orders.find(function(x){return x.id===r.oid;});
-    if(o&&o.items[r.idx]) o.items[r.idx].collected=!currentlyCollected;
+    if(o&&o.items[r.idx]) o.items[r.idx].collected=newVal;
   });
-  saveData();renderSummary();
-  toast(!currentlyCollected?'✓ Item collected':'Unmarked');
+  saveData();
+  /* mobile: in-place update using the button element passed directly */
+  if(window.innerWidth<=768&&btnEl){
+    btnEl.classList.toggle('done',newVal);
+    btnEl.textContent=newVal?'✓ Got it':'Collect';
+    var item=btnEl.closest('.ditem');
+    if(item) item.classList.toggle('di-collected',newVal);
+    updateSumProgress(getSummaryOrders());
+  } else {
+    renderSummary();
+  }
+  toast(newVal?'✓ Collected':'Unmarked');
 }
+
 
 function exportSummarySheets(){
   if(!GD.accessToken){toast('Connect Google Drive first.');return;}
@@ -4520,11 +4700,23 @@ var LK={IDLE_MS:15*60*1000,idleTimer:null,barStart:0,barTick:null};
 function lkInit(){
   document.getElementById('lock-screen').style.display='flex';
   document.getElementById('app-wrap').style.display='none';
+  /* re-attach button listener each time lock shows — belt and suspenders */
+  var inp2=document.getElementById('lk-input');
+  if(inp2){
+    inp2.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();lkSubmit();}};
+  }
+  var btn=document.getElementById('lk-btn');
+  if(btn){
+    var newBtn=btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn,btn);
+    newBtn.addEventListener('click',function(e){e.stopPropagation();lkSubmit();},false);
+    newBtn.addEventListener('touchend',function(e){e.preventDefault();e.stopPropagation();lkSubmit();},false);
+    newBtn.textContent='Unlock';
+  }
   /* logo stays — do not overwrite lk-icon */
   document.getElementById('lk-title').textContent='Order Manager';
   document.getElementById('lk-sub').textContent='Enter the password to continue';
   document.getElementById('lk-input').placeholder='••••••••';
-  document.getElementById('lk-btn').textContent='Unlock';
   document.getElementById('lk-hint').textContent='Contact Simon if you need access.';
   setTimeout(function(){
     var inp=document.getElementById('lk-input');
@@ -4534,17 +4726,19 @@ function lkInit(){
 }
 
 function lkSubmit(){
-  var inp=document.getElementById('lk-input');
-  var val=inp.value;
-  var err=document.getElementById('lk-err');
-  if(lkHash(val)===LK_HASH){
-    lkUnlock(val);
-  } else {
-    err.textContent='Incorrect password — try again.';
-    inp.value='';inp.classList.add('shake');inp.focus();
-    /* notify on failed attempt too */
-    lkNotify('FAILED login attempt', val.length+' chars entered');
-  }
+  try{
+    var inp=document.getElementById('lk-input');
+    var val=(inp.value||'');
+    var err=document.getElementById('lk-err');
+    if(lkHash(val)===LK_HASH){
+      lkUnlock(val);
+    } else {
+      err.textContent='Incorrect password — try again.';
+      inp.value='';inp.classList.add('shake');
+      setTimeout(function(){inp.focus();},50);
+      setTimeout(function(){lkNotify('FAILED login attempt', val.length+' chars entered');},200);
+    }
+  }catch(e){console.error('lkSubmit error:',e);}
 }
 
 function lkUnlock(pw){
@@ -4578,11 +4772,17 @@ function lkResetIdle(){
     document.addEventListener(e,lkActivity,true);
   });
 }
-function lkActivity(){lkResetIdle();}
+function lkActivity(){
+  /* don't reset idle timer while lock screen is showing */
+  var ls=document.getElementById('lock-screen');
+  if(ls&&ls.style.display!=='none') return;
+  lkResetIdle();
+}
 
 function lkNotify(event, detail){
   if(!EMAILJS_PUBLIC_KEY||!EMAILJS_SERVICE_ID||!EMAILJS_TEMPLATE_ID) return;
   try{
+    if(typeof emailjs==='undefined') return; /* CDN not loaded yet — skip silently */
     emailjs.init(EMAILJS_PUBLIC_KEY);
     emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
       event_type: event,
