@@ -881,8 +881,8 @@ textarea{resize:vertical;min-height:60px}
       <div>
         <label>Filter by status</label>
         <select id="sum-status" onchange="renderSummary()" style="width:160px">
+          <option value="all" selected>All orders</option>
           <option value="unpaid,partial">Unpaid &amp; partial</option>
-          <option value="all">All orders</option>
           <option value="unpaid">Unpaid only</option>
           <option value="partial">Partial only</option>
           <option value="paid">Paid only</option>
@@ -3188,15 +3188,19 @@ function renderSummary(){
   var sv=document.getElementById('sum-status').value;
   var sd=document.getElementById('sum-date').value;
 
-  /* info strip */
+  /* info strip — shows filtered results */
   var totalAmt=ords.reduce(function(s,o){return s+oSell(o)},0);
   var custCount=[...new Set(ords.map(function(o){return o.cid}))].length;
-  document.getElementById('sum-info').innerHTML=
-    '<strong>'+ords.length+'</strong> order'+(ords.length!==1?'s':'')+
-    ' &middot; <strong>'+custCount+'</strong> customer'+(custCount!==1?'s':'')+
-    ' &middot; Total: <strong>'+rm(totalAmt)+'</strong>'+
-    (sd?' &middot; Date: <strong>'+sd+'</strong>':'')+
-    ' &middot; Status: <strong>'+sv+'</strong>';
+  var infoTxt='';
+  if(!ords.length){
+    infoTxt='<span style="color:#b91c1c">No orders match — try changing the filter or date.</span>';
+  } else {
+    infoTxt='<strong>'+ords.length+'</strong> order'+(ords.length!==1?'s':'')+
+      ' &middot; <strong>'+custCount+'</strong> customer'+(custCount!==1?'s':'')+
+      ' &middot; Total: <strong>'+rm(totalAmt)+'</strong>'+
+      (sd?' &middot; Date: <strong>'+sd+'</strong>':'');
+  }
+  document.getElementById('sum-info').innerHTML=infoTxt;
 
   if(!ords.length){
     document.getElementById('sum-table').innerHTML='<div class="empty" style="padding:40px">No orders match the selected filter.</div>';
@@ -4671,7 +4675,14 @@ function gdLoad(){
       D.nid=payload.nid||1;
       saveData();
       selCust=null;
+      /* reset Order Summary filter to show all orders after load */
+      var ss=document.getElementById('sum-status');
+      var sd2=document.getElementById('sum-date');
+      if(ss) ss.value='all';
+      if(sd2) sd2.value='';
+      sumMobMode='all';
       show('receipt');
+      renderDash();
       gdSetStatus('Connected','on');
       toast('Loaded from Google Drive \u2713 — '+ordCount+' orders, '+custCount+' customers');
     }).catch(function(err){
