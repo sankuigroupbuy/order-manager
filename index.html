@@ -480,19 +480,22 @@ textarea{resize:vertical;min-height:60px}
   .dcard-grand{text-align:center;padding:12px 0 44px;color:#888;font-size:13px}
   .dcard-grand-amt{display:block;font-size:26px;font-weight:800;color:#111;margin-top:3px}
 
-  /* swipe-to-pay */
-  .dcard-swipe-wrap{position:relative;overflow:hidden;border-radius:18px;margin-bottom:14px}
-  .dcard-swipe-wrap .dcard{margin-bottom:0;border-radius:18px;position:relative;z-index:1;transition:transform .15s ease,box-shadow .15s}
-  .dcard-swipe-bg{position:absolute;inset:0;border-radius:18px;display:flex;align-items:center;padding:0 22px;font-size:14px;font-weight:700;z-index:0}
-  .dcard-swipe-bg.right{background:#16a34a;color:#fff;justify-content:flex-start}
-  .dcard-swipe-bg.left{background:#dc2626;color:#fff;justify-content:flex-end}
-  .swipe-hint{font-size:18px;margin-right:6px}
+  /* long-press to pay — card header hint */
+  .dcard-hdr{-webkit-user-select:none;user-select:none;}
+  .dcard-hdr::after{content:'Hold to pay';display:block;font-size:10px;color:#bbb;text-align:right;margin-top:2px;font-weight:400;}
 
   /* date chips row */
   #sum-date-chips{display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:6px;padding:0 0 10px;margin-bottom:4px}
   #sum-date-chips::-webkit-scrollbar{display:none}
   .date-chip{padding:6px 14px;border-radius:99px;font-size:12px;font-weight:600;border:1.5px solid #e5e7eb;background:#fff;color:#555;cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;flex-shrink:0}
   .date-chip.active{background:#1a3a2a;border-color:#1a3a2a;color:#fff}
+
+  /* mobile customer search */
+  #sum-mob-search{display:none;align-items:center;gap:8px;padding:0 0 10px;position:relative}
+  #sum-mob-search input{flex:1;padding:10px 14px 10px 36px;border-radius:12px;border:1.5px solid #e5e7eb;font-size:14px;outline:none;background:#f9fafb;-webkit-appearance:none}
+  #sum-mob-search input:focus{border-color:#1a3a2a;background:#fff}
+  #sum-mob-search .srch-icon{position:absolute;left:12px;top:50%;transform:translateY(-55%);font-size:15px;color:#aaa;pointer-events:none}
+  #sum-mob-search .srch-clear{position:absolute;right:10px;top:50%;transform:translateY(-55%);font-size:18px;color:#aaa;background:none;border:none;cursor:pointer;padding:4px;display:none}
 
   /* sticky card header */
   .dcard-hdr-sticky{display:none;position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e5e7eb;padding:10px 14px;align-items:center;justify-content:space-between;gap:8px;border-radius:0}
@@ -930,6 +933,12 @@ textarea{resize:vertical;min-height:60px}
     </div>
     <!-- MOBILE date chips — populated by JS, hidden on desktop -->
     <div id="sum-date-chips" style="display:none"></div>
+    <!-- MOBILE customer search — hidden on desktop -->
+    <div id="sum-mob-search" style="display:none">
+      <span class="srch-icon">🔍</span>
+      <input id="sum-mob-search-inp" type="search" placeholder="Search customer..." oninput="sumMobSearch(this.value)" autocomplete="off" autocorrect="off" autocapitalize="off">
+      <button class="srch-clear" id="sum-mob-search-clear" onclick="sumMobSearchClear()">×</button>
+    </div>
 
     <!-- collection progress strip (mobile only) -->
     <div id="sum-progress-strip" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:10px 14px;margin-bottom:14px;gap:10px;align-items:center">
@@ -3209,6 +3218,26 @@ function buildDateChips(ords){
   }).join('');
 }
 
+/* ── mobile customer search ── */
+var sumMobSearchTerm='';
+function sumMobSearch(val){
+  sumMobSearchTerm=val.toLowerCase().trim();
+  var clr=document.getElementById('sum-mob-search-clear');
+  if(clr) clr.style.display=sumMobSearchTerm?'':'none';
+  /* show/hide cards instantly without full re-render */
+  document.querySelectorAll('.dcard').forEach(function(card){
+    var name=card.querySelector('.dcard-name');
+    if(!name) return;
+    var match=!sumMobSearchTerm||name.textContent.toLowerCase().indexOf(sumMobSearchTerm)>=0;
+    card.style.display=match?'':'none';
+  });
+}
+function sumMobSearchClear(){
+  var inp=document.getElementById('sum-mob-search-inp');
+  if(inp){inp.value='';inp.focus();}
+  sumMobSearch('');
+}
+
 /* ── update progress bar (mobile only) ── */
 function updateSumProgress(ords){
   var strip = document.getElementById('sum-progress-strip');
@@ -3383,6 +3412,14 @@ function renderSummary(){
   if(isMobile){
     updateSumProgress(ords);
     buildDateChips(ords);
+    /* show search bar, reset term */
+    var srchWrap=document.getElementById('sum-mob-search');
+    if(srchWrap) srchWrap.style.display='flex';
+    sumMobSearchTerm='';
+    var srchInp=document.getElementById('sum-mob-search-inp');
+    if(srchInp) srchInp.value='';
+    var srchClr=document.getElementById('sum-mob-search-clear');
+    if(srchClr) srchClr.style.display='none';
     var mhtml='';
     merged.forEach(function(m){
       var c=cp(m.cid);
@@ -3425,9 +3462,6 @@ function renderSummary(){
       var payCls='btn-dpay'+(isPaid?' paid':(isPartial?' partial':''));
       var payTxt=isPaid?'✓ Paid':(isPartial?'● Partial':'Mark Paid');
       mhtml+=
-        '<div class="dcard-swipe-wrap" id="dswrap-'+m.cid+'">'+
-        '<div class="dcard-swipe-bg right"><span class="swipe-hint">✓</span> Mark Paid</div>'+
-        '<div class="dcard-swipe-bg left">Undo <span class="swipe-hint">↩</span></div>'+
         '<div class="dcard'+(isPaid?' dc-paid':'')+'" id="dcard-'+m.cid+'">'+
           /* sticky mini-header — shown by JS when card scrolls out of view */
           '<div class="dcard-hdr-sticky" id="dsticky-'+m.cid+'">'+
@@ -3452,8 +3486,7 @@ function renderSummary(){
           '<div class="dcard-footer">'+
             '<button class="'+payCls+'" id="dpaybtn-'+m.cid+'" data-cid="'+m.cid+'" data-date="'+m.date+'">'+payTxt+'</button>'+
           '</div>'+
-        '</div>'+  /* close .dcard */
-        '</div>';  /* close .dcard-swipe-wrap */
+        '</div>';  /* close .dcard */
     });
     mhtml+='<div class="dcard-grand">Grand Total<span class="dcard-grand-amt">'+rm(grandTotal)+'</span></div>';
     var sumTbl=document.getElementById('sum-table');
@@ -3486,63 +3519,23 @@ function renderSummary(){
     sumTbl.addEventListener('touchend',sumTbl._touchHandler,{passive:false});
     sumTbl.addEventListener('click',sumTbl._clickHandler);
 
-    /* ── Swipe-to-pay gesture ── */
+    /* ── Long-press on card header to mark paid (no scroll interference) ── */
     merged.forEach(function(m){
-      var wrap=document.getElementById('dswrap-'+m.cid);
-      var card=document.getElementById('dcard-'+m.cid);
-      if(!wrap||!card) return;
-      var startX=0,startY=0,isDragging=false,isHoriz=null,cancelled=false;
-      var THRESHOLD=8; /* px before we decide direction */
-      wrap.addEventListener('touchstart',function(e){
-        startX=e.touches[0].clientX;
-        startY=e.touches[0].clientY;
-        isDragging=false;isHoriz=null;cancelled=false;
-        card.style.transition='none';
-      },{passive:true});
-      wrap.addEventListener('touchmove',function(e){
-        if(cancelled) return; /* vertical — let browser scroll freely */
-        var dx=e.touches[0].clientX-startX;
-        var dy=e.touches[0].clientY-startY;
-        var adx=Math.abs(dx),ady=Math.abs(dy);
-        /* wait for enough movement before deciding direction */
-        if(isHoriz===null){
-          if(adx<THRESHOLD&&ady<THRESHOLD) return;
-          if(ady>adx){
-            /* clearly vertical — cancel swipe, never call preventDefault again */
-            cancelled=true;
-            return;
-          }
-          isHoriz=true;
-        }
-        /* confirmed horizontal — take over from scroll */
-        e.preventDefault();
-        isDragging=true;
-        var capped=Math.max(-120,Math.min(120,dx));
-        card.style.transform='translateX('+capped+'px)';
-        var bgR=wrap.querySelector('.dcard-swipe-bg.right');
-        var bgL=wrap.querySelector('.dcard-swipe-bg.left');
-        if(bgR) bgR.style.opacity=dx>20?Math.min(1,(dx-20)/80):0;
-        if(bgL) bgL.style.opacity=dx<-20?Math.min(1,(-dx-20)/80):0;
-      },{passive:false});
-      wrap.addEventListener('touchend',function(e){
-        card.style.transition='transform .2s ease';
-        card.style.transform='';
-        var bgR=wrap.querySelector('.dcard-swipe-bg.right');
-        var bgL=wrap.querySelector('.dcard-swipe-bg.left');
-        if(bgR) bgR.style.opacity=0;
-        if(bgL) bgL.style.opacity=0;
-        if(!isDragging||cancelled) return;
-        var dx=e.changedTouches[0].clientX-startX;
-        if(dx>90){
+      var hdr=document.querySelector('#dcard-'+m.cid+' .dcard-hdr');
+      if(!hdr) return;
+      var lpt=null;
+      hdr.addEventListener('touchstart',function(e){
+        lpt=setTimeout(function(){
+          lpt=null;
           haptic('heavy');
           sumTogglePaid(m.cid,m.date);
-        } else if(dx<-90){
-          haptic('double');
-          var ords2=D.orders.filter(function(o){return o.cid===m.cid&&o.date===m.date;});
-          var anyPaid=ords2.some(function(o){return o.status==='paid';});
-          if(anyPaid) sumTogglePaid(m.cid,m.date);
-        }
+          /* flash the card briefly to confirm */
+          var card=document.getElementById('dcard-'+m.cid);
+          if(card){card.style.transition='background .15s';card.style.background='#dcfce7';setTimeout(function(){card.style.background='';},400);}
+        },600);
       },{passive:true});
+      hdr.addEventListener('touchend',function(){if(lpt){clearTimeout(lpt);lpt=null;}},{passive:true});
+      hdr.addEventListener('touchmove',function(){if(lpt){clearTimeout(lpt);lpt=null;}},{passive:true});
     });
 
     /* ── Sticky header via IntersectionObserver ── */
