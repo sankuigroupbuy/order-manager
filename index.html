@@ -3461,44 +3461,60 @@ function renderSummary(){
     /* wire buttons via event delegation — deduplicate by using named handlers on element */
     if(sumTbl._clickHandler) sumTbl.removeEventListener('click',sumTbl._clickHandler);
     if(sumTbl._touchHandler) sumTbl.removeEventListener('touchend',sumTbl._touchHandler);
-    sumTbl._clickHandler=function(e){
+    sumTbl._touchHandler=function(e){
       var btn=e.target.closest('button');
       if(!btn)return;
       if(btn.dataset.refs!==undefined&&btn.dataset.refs!==''){
-        e.preventDefault();
+        e.preventDefault(); /* kill the 300ms ghost click */
         sumToggleCollected(btn.dataset.refs,btn);
       } else if(btn.dataset.cid!==undefined&&btn.dataset.cid!==''){
         e.preventDefault();
         sumTogglePaid(parseInt(btn.dataset.cid),btn.dataset.date);
       }
     };
-    sumTbl._touchHandler=function(e){
+    /* click handler as fallback for non-touch (desktop) */
+    sumTbl._clickHandler=function(e){
+      if(e.sourceCapabilities&&e.sourceCapabilities.firesTouchEvents) return;
       var btn=e.target.closest('button');
       if(!btn)return;
-      if((btn.dataset.refs!==undefined&&btn.dataset.refs!=='')||(btn.dataset.cid!==undefined&&btn.dataset.cid!=='')){
-        e.preventDefault();
+      if(btn.dataset.refs!==undefined&&btn.dataset.refs!==''){
+        sumToggleCollected(btn.dataset.refs,btn);
+      } else if(btn.dataset.cid!==undefined&&btn.dataset.cid!==''){
+        sumTogglePaid(parseInt(btn.dataset.cid),btn.dataset.date);
       }
     };
-    sumTbl.addEventListener('click',sumTbl._clickHandler);
     sumTbl.addEventListener('touchend',sumTbl._touchHandler,{passive:false});
+    sumTbl.addEventListener('click',sumTbl._clickHandler);
 
     /* ── Swipe-to-pay gesture ── */
     merged.forEach(function(m){
       var wrap=document.getElementById('dswrap-'+m.cid);
       var card=document.getElementById('dcard-'+m.cid);
       if(!wrap||!card) return;
-      var startX=0,startY=0,isDragging=false,isHoriz=null;
+      var startX=0,startY=0,isDragging=false,isHoriz=null,cancelled=false;
+      var THRESHOLD=8; /* px before we decide direction */
       wrap.addEventListener('touchstart',function(e){
         startX=e.touches[0].clientX;
         startY=e.touches[0].clientY;
-        isDragging=false;isHoriz=null;
+        isDragging=false;isHoriz=null;cancelled=false;
         card.style.transition='none';
       },{passive:true});
       wrap.addEventListener('touchmove',function(e){
+        if(cancelled) return; /* vertical — let browser scroll freely */
         var dx=e.touches[0].clientX-startX;
         var dy=e.touches[0].clientY-startY;
-        if(isHoriz===null) isHoriz=Math.abs(dx)>Math.abs(dy);
-        if(!isHoriz) return;
+        var adx=Math.abs(dx),ady=Math.abs(dy);
+        /* wait for enough movement before deciding direction */
+        if(isHoriz===null){
+          if(adx<THRESHOLD&&ady<THRESHOLD) return;
+          if(ady>adx){
+            /* clearly vertical — cancel swipe, never call preventDefault again */
+            cancelled=true;
+            return;
+          }
+          isHoriz=true;
+        }
+        /* confirmed horizontal — take over from scroll */
         e.preventDefault();
         isDragging=true;
         var capped=Math.max(-120,Math.min(120,dx));
@@ -3509,20 +3525,18 @@ function renderSummary(){
         if(bgL) bgL.style.opacity=dx<-20?Math.min(1,(-dx-20)/80):0;
       },{passive:false});
       wrap.addEventListener('touchend',function(e){
-        var dx=e.changedTouches[0].clientX-startX;
         card.style.transition='transform .2s ease';
         card.style.transform='';
         var bgR=wrap.querySelector('.dcard-swipe-bg.right');
         var bgL=wrap.querySelector('.dcard-swipe-bg.left');
         if(bgR) bgR.style.opacity=0;
         if(bgL) bgL.style.opacity=0;
-        if(!isDragging) return;
+        if(!isDragging||cancelled) return;
+        var dx=e.changedTouches[0].clientX-startX;
         if(dx>90){
-          /* swipe right — mark paid */
           haptic('heavy');
           sumTogglePaid(m.cid,m.date);
         } else if(dx<-90){
-          /* swipe left — undo (mark unpaid) */
           haptic('double');
           var ords2=D.orders.filter(function(o){return o.cid===m.cid&&o.date===m.date;});
           var anyPaid=ords2.some(function(o){return o.status==='paid';});
