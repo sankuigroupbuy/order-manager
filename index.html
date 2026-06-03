@@ -3411,7 +3411,7 @@ function renderSummary(){
               '<div class="ditem-name">'+esc(p.name)+'</div>'+
               '<div class="ditem-meta">'+parseFloat(it.q).toFixed(it.q%1?2:0)+' × '+rm(sell)+' = <strong>'+rm(sub)+'</strong>'+payPill+'</div>'+
             '</div>'+
-            '<button class="btn-dcollect'+(it.collected?' done':'')+'" data-refs=''+refsJson+'' data-item="'+itemId+'">'+(it.collected?'✓ Got it':'Collect')+'</button>'+
+            '<button class="btn-dcollect'+(it.collected?' done':'')+'" data-refs="'+refsJson.replace(/"/g,'&quot;')+'" data-item="'+itemId+'">'+(it.collected?'\u2713 Got it':'Collect')+'</button>'+
           '</div>';
       });
       var progPct=itemCount>0?Math.round(collCount/itemCount*100):0;
