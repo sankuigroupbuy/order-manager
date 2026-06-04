@@ -3564,15 +3564,15 @@ function exportSummaryExcel(){
   var ords=getSummaryOrders();
   if(!ords.length){toast('No orders to export.');return}
 
-  /* ── merge ── */
+  /* ── merge — store itemStatus per item from its own order ── */
   var mergedMap={};
   ords.forEach(function(o){
     var key=o.cid+'|'+o.date;
-    if(!mergedMap[key]) mergedMap[key]={cid:o.cid,date:o.date,items:[],status:o.status};
+    if(!mergedMap[key]) mergedMap[key]={cid:o.cid,date:o.date,items:[]};
     o.items.forEach(function(it){
-      var ex=mergedMap[key].items.find(function(x){return x.s===it.s&&(x.sp||0)===(it.sp||0);});
+      var ex=mergedMap[key].items.find(function(x){return x.s===it.s&&(x.sp||0)===(it.sp||0)&&x.itemStatus===o.status;});
       if(ex){ex.q=parseFloat((ex.q+it.q).toFixed(2));if(it.collected)ex.collected=true;}
-      else{mergedMap[key].items.push({s:it.s,q:it.q,sp:it.sp,cp:it.cp,collected:!!it.collected});}
+      else{mergedMap[key].items.push({s:it.s,q:it.q,sp:it.sp,cp:it.cp,collected:!!it.collected,itemStatus:o.status});}
     });
   });
   var merged=Object.values(mergedMap).sort(function(a,b){
@@ -3635,7 +3635,7 @@ function exportSummaryExcel(){
       var sub=parseFloat((sell*it.q).toFixed(2));
       blockTotal+=sub;
       var isColl=!!it.collected;
-      var row=ws1.addRow([cname,p.name,parseFloat(sell.toFixed(2)),parseFloat(it.q.toFixed(2)),sub,isColl?'Collected':'Not collected',m.date,m.status]);
+      var row=ws1.addRow([cname,p.name,parseFloat(sell.toFixed(2)),parseFloat(it.q.toFixed(2)),sub,isColl?'Collected':'Not collected',m.date,it.itemStatus||'unpaid']);
       /* number formats */
       row.getCell(3).numFmt='0.00';
       row.getCell(4).numFmt='0.00';
