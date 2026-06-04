@@ -3563,15 +3563,20 @@ function exportSummaryExcel(){
   var ords=getSummaryOrders();
   if(!ords.length){toast('No orders to export.');return}
 
-  /* merge same customer+date */
+  /* ── merge same customer+date, preserving collected status per item ── */
   var mergedMap={};
   ords.forEach(function(o){
     var key=o.cid+'|'+o.date;
-    if(!mergedMap[key]) mergedMap[key]={cid:o.cid,date:o.date,items:[],status:o.status};
-    o.items.forEach(function(it){
+    if(!mergedMap[key]) mergedMap[key]={cid:o.cid,date:o.date,items:[],status:o.status,oids:[]};
+    mergedMap[key].oids.push(o.id);
+    o.items.forEach(function(it,idx){
       var ex=mergedMap[key].items.find(function(x){return x.s===it.s&&(x.sp||0)===(it.sp||0);});
-      if(ex){ex.q=parseFloat((ex.q+it.q).toFixed(2));}
-      else{mergedMap[key].items.push({s:it.s,q:it.q,sp:it.sp,cp:it.cp});}
+      if(ex){
+        ex.q=parseFloat((ex.q+it.q).toFixed(2));
+        if(it.collected) ex.collected=true; /* if any sub-order collected, mark collected */
+      } else {
+        mergedMap[key].items.push({s:it.s,q:it.q,sp:it.sp,cp:it.cp,collected:!!it.collected});
+      }
     });
   });
   var merged=Object.values(mergedMap).sort(function(a,b){
@@ -3580,84 +3585,116 @@ function exportSummaryExcel(){
     return na.localeCompare(nb)||a.date.localeCompare(b.date);
   });
 
-  /* ── build rows matching screenshot format ──
-     Header row per customer block, blank separator row between customers */
+  /* ── Sheet 1: Order Summary ── */
+  /* Columns: Order by | Product | Unit price | Qty | Subtotal | Collected | Order date | Status */
+  var COLS=['A','B','C','D','E','F','G','H'];
+  var HDR=['Order by','Product','Unit price (A$)','Qty','Subtotal (A$)','Collected','Order date','Status'];
   var ws_data=[];
-  var rowMeta=[];/* track row type for styling */
+  var rowMeta=[];
   var grandTotal=0;
+  /* product qty map for sheet 2 */
+  var prodMap={};
 
   merged.forEach(function(m,bi){
     var c=cp(m.cid);
     var cname=c?c.name:'Unknown';
     var blockTotal=0;
 
-    /* customer block header */
-    ws_data.push(['Order by','Product','Unit price (A$)','Qty','Subtotal (A$)','Remark','Order date','Status']);
+    /* customer block header — bold + light blue */
+    ws_data.push(HDR.slice());
     rowMeta.push('header');
 
-    /* item rows */
     m.items.forEach(function(it){
       var p=sp(it.s);if(!p)return;
       var sell=it.sp!=null?it.sp:p.sell;
       var sub=parseFloat((sell*it.q).toFixed(2));
       blockTotal+=sub;
+      var collTxt=it.collected?'Collected':'Not collected';
 
-      /* look up remark from delivery runs */
-      var remark='';
-      D.runs.forEach(function(run){
-        var entry=run.entries&&run.entries.find(function(e){return e.cid===m.cid;});
-        if(entry&&entry.remark) remark=entry.remark;
-      });
+      ws_data.push([cname,p.name,parseFloat(sell.toFixed(2)),parseFloat(it.q.toFixed(2)),sub,collTxt,m.date,m.status]);
+      rowMeta.push(it.collected?'item-collected':'item');
 
-      ws_data.push([cname,p.name,parseFloat(sell.toFixed(2)),parseFloat(it.q.toFixed(2)),sub,remark,m.date,m.status]);
-      rowMeta.push('item');
+      /* accumulate for sheet 2 */
+      var pid=it.s;
+      if(!prodMap[pid]) prodMap[pid]={name:p.name,qty:0,revenue:0,cat:p.cat||'Others'};
+      prodMap[pid].qty=parseFloat((prodMap[pid].qty+it.q).toFixed(2));
+      prodMap[pid].revenue=parseFloat((prodMap[pid].revenue+sub).toFixed(2));
     });
 
     grandTotal+=blockTotal;
 
-    /* customer total row */
+    /* customer total row — bold + light blue */
     ws_data.push([cname+' Total','','','',parseFloat(blockTotal.toFixed(2)),'','','']);
     rowMeta.push('total');
 
-    /* blank separator (except last customer) */
-    if(bi<merged.length-1){
-      ws_data.push(['','','','','','','','']);
-      rowMeta.push('blank');
-    }
+    if(bi<merged.length-1){ws_data.push(new Array(8).fill(''));rowMeta.push('blank');}
   });
 
-  /* grand total */
-  ws_data.push(['','','','','','','','']);
+  /* grand total row */
+  ws_data.push(new Array(8).fill(''));
   ws_data.push(['GRAND TOTAL','','','',parseFloat(grandTotal.toFixed(2)),'','','']);
   rowMeta.push('blank');rowMeta.push('grand');
 
-  var ws=XLSX.utils.aoa_to_sheet(ws_data);
-  ws['!cols']=[{wch:18},{wch:28},{wch:14},{wch:8},{wch:14},{wch:20},{wch:12},{wch:10}];
+  var ws1=XLSX.utils.aoa_to_sheet(ws_data);
+  ws1['!cols']=[{wch:18},{wch:30},{wch:14},{wch:8},{wch:14},{wch:16},{wch:12},{wch:10}];
 
-  /* styling */
-  var headerFill={patternType:'solid',fgColor:{rgb:'D9E1F2'}};
-  var totalFill={patternType:'solid',fgColor:{rgb:'C6EFCE'}};/* green — matches Sheets */
+  /* styling fills */
+  var blueFill ={patternType:'solid',fgColor:{rgb:'BDD7EE'}}; /* light blue — headers & totals */
   var grandFill={patternType:'solid',fgColor:{rgb:'1E3A5F'}};
-  var cols=['A','B','C','D','E','F','G','H'];
+  var collFill ={patternType:'solid',fgColor:{rgb:'E2EFDA'}}; /* light green — collected rows */
 
   rowMeta.forEach(function(type,ri){
     var rowNum=ri+1;
-    cols.forEach(function(col){
+    COLS.forEach(function(col){
       var addr=col+rowNum;
-      if(!ws[addr]) ws[addr]={t:'s',v:''};
+      if(!ws1[addr]) ws1[addr]={t:'s',v:''};
       if(type==='header'){
-        ws[addr].s={font:{bold:true},fill:headerFill,alignment:{horizontal:'left'}};
+        ws1[addr].s={font:{bold:true},fill:blueFill,alignment:{horizontal:'center'},border:{bottom:{style:'thin',color:{rgb:'9DC3E6'}}}};
       } else if(type==='total'){
-        ws[addr].s={font:{bold:true},fill:totalFill};
-        if(col==='A') ws[addr].s.alignment={horizontal:'right'};
+        ws1[addr].s={font:{bold:true},fill:blueFill};
+        if(col==='A') ws1[addr].s.alignment={horizontal:'right'};
       } else if(type==='grand'){
-        ws[addr].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:grandFill};
+        ws1[addr].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:grandFill,alignment:{horizontal:col==='A'?'left':'center'}};
+      } else if(type==='item-collected'){
+        ws1[addr].s={fill:collFill};
+      }
+    });
+  });
+
+  /* ── Sheet 2: Product by Qty ── */
+  var prodRows=[['Product','Category','Total Qty','Total Revenue (A$)']];
+  var prodMeta=['header'];
+  var prodList=Object.values(prodMap).sort(function(a,b){return b.qty-a.qty;});
+  var totalQty=0,totalRev=0;
+  prodList.forEach(function(p){
+    prodRows.push([p.name,p.cat,p.qty,p.revenue]);
+    prodMeta.push('item');
+    totalQty=parseFloat((totalQty+p.qty).toFixed(2));
+    totalRev=parseFloat((totalRev+p.revenue).toFixed(2));
+  });
+  prodRows.push(['TOTAL','',totalQty,totalRev]);
+  prodMeta.push('grand');
+
+  var ws2=XLSX.utils.aoa_to_sheet(prodRows);
+  ws2['!cols']=[{wch:32},{wch:16},{wch:12},{wch:18}];
+
+  var COLS2=['A','B','C','D'];
+  prodMeta.forEach(function(type,ri){
+    var rowNum=ri+1;
+    COLS2.forEach(function(col){
+      var addr=col+rowNum;
+      if(!ws2[addr]) ws2[addr]={t:'s',v:''};
+      if(type==='header'){
+        ws2[addr].s={font:{bold:true},fill:blueFill,alignment:{horizontal:'center'},border:{bottom:{style:'thin',color:{rgb:'9DC3E6'}}}};
+      } else if(type==='grand'){
+        ws2[addr].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:grandFill};
       }
     });
   });
 
   var wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Order Summary');
+  XLSX.utils.book_append_sheet(wb,ws1,'Order Summary');
+  XLSX.utils.book_append_sheet(wb,ws2,'Products by Qty');
   var today=new Date().toISOString().split('T')[0];
   XLSX.writeFile(wb,'order-summary-'+today+'.xlsx');
   toast('Summary exported ✓');
