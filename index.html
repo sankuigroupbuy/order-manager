@@ -765,11 +765,14 @@ textarea{resize:vertical;min-height:60px}
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
         <div><label>Category</label>
           <select id="s-cat" style="font-size:13px;padding:6px 10px;border:1px solid #e0e0e0;border-radius:8px">
-            <option value="Others">📦 Others</option>
-            <option value="Meat">🥩 Meat</option>
+            <option value="Meat & Poultry">🥩 Meat &amp; Poultry</option>
             <option value="Fish">🐟 Fish</option>
             <option value="Seafood">🦐 Seafood</option>
+            <option value="Ready-made & Snacks">🥟 Ready-made &amp; Snacks</option>
+            <option value="Fruit & Vegetables">🍎 Fruit &amp; Vegetables</option>
+            <option value="Household">🏠 Household</option>
             <option value="Hills Sweets NMC">🍰 Hills Sweets NMC</option>
+            <option value="Others">📦 Others</option>
           </select>
         </div>
       </div>
@@ -2502,7 +2505,7 @@ function confirmImport(){
    • renderStk, addStock, amendStk, saveStk, removeStk
    ████████████████████████████████████████████████ */
 var STK_CATS=['Meat & Poultry','Fish','Seafood','Ready-made & Snacks','Fruit & Vegetables','Household','Hills Sweets NMC','Others'];
-var STK_CAT_ICONS={Meat:'🥩',Fish:'🐟',Seafood:'🦐','Hills Sweets NMC':'🍰',Others:'📦'};
+var STK_CAT_ICONS={'Meat & Poultry':'🥩',Fish:'🐟',Seafood:'🦐','Ready-made & Snacks':'🥟','Fruit & Vegetables':'🍎',Household:'🏠','Hills Sweets NMC':'🍰',Others:'📦'};
 
 function renderStk(){
   var wrap=document.getElementById('stk-grouped');
@@ -5559,7 +5562,7 @@ function ofRenderPicker(){
 }
 
 function ofCatEmoji(cat){
-  var map={'Meat':'🥩','Fish':'🐟','Seafood':'🦐','Hills Sweets NMC':'🍡','Others':'📦'};
+  var map={'Meat & Poultry':'🥩','Fish':'🐟','Seafood':'🦐','Ready-made & Snacks':'🥟','Fruit & Vegetables':'🍎','Household':'🏠','Hills Sweets NMC':'🍰','Others':'📦'};
   return map[cat]||'📦';
 }
 
