@@ -2515,6 +2515,12 @@ function renderStk(){
     wrap.innerHTML='<div class="empty" style="padding:30px;text-align:center">No stock items yet.</div>';
     return;
   }
+  /* migrate old category names to new ones */
+  var CAT_MIGRATE={'Meat':'Meat & Poultry'};
+  items.forEach(function(p){
+    if(p.cat&&CAT_MIGRATE[p.cat]){p.cat=CAT_MIGRATE[p.cat];saveData();}
+  });
+
   /* group by category */
   var groups={};
   STK_CATS.forEach(function(cat){groups[cat]=[];});
