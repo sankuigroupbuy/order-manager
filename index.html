@@ -6179,8 +6179,8 @@ function scDriveWritePub(pubData,cb){
 
 function scCopyLink(){
   /* showcase now lives in its own repo: <username>.github.io/menu/ */
-  var origin=window.location.origin; /* e.g. https://tayf7400.github.io */
-  var url=origin+'/menu/';
+  var origin=window.location.origin; /* e.g. https://sankuigroupbuy.github.io */
+  var url='https://sankuigroupbuy.github.io/menu/';
   navigator.clipboard.writeText(url).then(function(){toast('Showcase link copied \u2713 \u2014 pin it in WhatsApp');}).catch(function(){
     var ta=document.createElement('textarea');ta.value=url;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
     toast('Link copied: '+url);
