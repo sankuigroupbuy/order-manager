@@ -1040,12 +1040,15 @@ textarea{resize:vertical;min-height:60px}
 
     <!-- product picker card -->
     <div class="card cp" style="margin-bottom:14px">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-        <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em">
-          📦 This week's products
-          <span id="of-sel-badge" style="background:#1e3a5f;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:6px">0 selected</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="ofTogglePicker()">
+          <button id="of-expand-btn" style="width:26px;height:26px;border-radius:6px;border:1.5px solid #d0d0d0;background:#f5f5f5;font-size:14px;font-weight:700;cursor:pointer;color:#555;line-height:1;display:flex;align-items:center;justify-content:center">−</button>
+          <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em">
+            📦 This week's products
+            <span id="of-sel-badge" style="background:#1e3a5f;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:6px">0 selected</span>
+          </div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center" id="of-search-wrap">
           <input type="text" id="of-search" placeholder="Search stock…" oninput="ofRenderPicker()" style="width:170px;font-size:12px;padding:5px 9px">
           <button class="btn btn-o btn-sm" onclick="ofClearAll()">Clear all</button>
         </div>
@@ -5602,6 +5605,18 @@ function ofToggle(id){
   if(OF.sel.has(id)) OF.sel.delete(id);
   else OF.sel.add(id);
   ofRenderPicker();
+}
+
+/* collapse/expand the product picker */
+var ofPickerOpen = true;
+function ofTogglePicker(){
+  ofPickerOpen = !ofPickerOpen;
+  var picker = document.getElementById('of-picker');
+  var search = document.getElementById('of-search-wrap');
+  var btn = document.getElementById('of-expand-btn');
+  if(picker){ picker.style.display = ofPickerOpen ? '' : 'none'; }
+  if(search){ search.style.display = ofPickerOpen ? '' : 'none'; }
+  if(btn){ btn.textContent = ofPickerOpen ? '\u2212' : '+'; btn.title = ofPickerOpen ? 'Collapse' : 'Expand'; }
 }
 
 function ofClearAll(){
