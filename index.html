@@ -5849,7 +5849,7 @@ function scUpdateBadge(){
 }
 
 function scAddItem(){
-  SC.items.push({id:SC.nid++,name:'',price:'',unit:'',desc:'',photo:null});
+  SC.items.push({id:SC.nid++,name:'',price:'',unit:'',desc:'',photos:[]});
   scSaveDraft();scRenderList();
   /* focus the new item's name field */
   setTimeout(function(){
@@ -5891,12 +5891,26 @@ function scRenderList(){
   if(!SC.items.length){wrap.innerHTML='<div class="empty" style="padding:14px">No products yet — tap \uFF0B Add product below.</div>';scUpdateBadge();return;}
   var html='';
   SC.items.forEach(function(it,idx){
-    html+='<div style="display:flex;gap:10px;padding:11px;border:1.5px solid #e5e5e5;border-radius:12px;margin-bottom:8px;background:#fff;align-items:flex-start">'+
-      /* photo */
-      '<label style="width:74px;height:74px;border-radius:10px;flex-shrink:0;cursor:pointer;overflow:hidden;display:flex;align-items:center;justify-content:center;'+(it.photo?'':'border:1.5px dashed #ccc;color:#bbb;font-size:22px')+'">'+
-        (it.photo?'<img src="'+it.photo+'" style="width:100%;height:100%;object-fit:cover">':'\ud83d\udcf7')+
-        '<input type="file" accept="image/*" style="display:none" onchange="scUploadPhoto(event,'+it.id+')">'+
-      '</label>'+
+    /* migrate legacy single photo → photos array */
+    if(it.photo&&!it.photos){it.photos=[it.photo];delete it.photo;}
+    if(!it.photos) it.photos=[];
+    /* build photo thumbnails strip */
+    var photosHtml='';
+    it.photos.forEach(function(ph,pi){
+      photosHtml+='<div style="position:relative;width:62px;height:62px;flex-shrink:0">'+
+        '<img src="'+ph+'" style="width:62px;height:62px;object-fit:cover;border-radius:9px;border:1px solid #ddd">'+
+        '<button onclick="scDelPhoto('+it.id+','+pi+')" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:#dc2626;color:#fff;border:2px solid #fff;font-size:11px;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center">\u2715</button>'+
+        (pi===0?'<span style="position:absolute;bottom:2px;left:2px;background:rgba(26,58,42,.85);color:#fff;font-size:8px;padding:1px 5px;border-radius:4px">主圖</span>':'')+
+      '</div>';
+    });
+    /* add-photo button */
+    photosHtml+='<label style="width:62px;height:62px;border-radius:9px;flex-shrink:0;cursor:pointer;border:1.5px dashed #bbb;color:#aaa;font-size:13px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px">'+
+      '\ud83d\udcf7<span style="font-size:9px">Add</span>'+
+      '<input type="file" accept="image/*" multiple style="display:none" onchange="scUploadPhoto(event,'+it.id+')">'+
+    '</label>';
+
+    html+='<div style="padding:11px;border:1.5px solid #e5e5e5;border-radius:12px;margin-bottom:8px;background:#fff">'+
+      '<div style="display:flex;gap:10px;align-items:flex-start">'+
       /* fields */
       '<div style="flex:1;min-width:0">'+
         '<div style="display:flex;gap:8px;margin-bottom:6px">'+
@@ -5912,6 +5926,10 @@ function scRenderList(){
         '<button class="btn btn-o btn-sm" style="padding:3px 8px" onclick="scMoveItem('+it.id+',1)" '+(idx===SC.items.length-1?'disabled':'')+'>\u2193</button>'+
         '<button class="btn btn-o btn-sm" style="padding:3px 8px;color:#dc2626" onclick="scDelItem('+it.id+')">\u2715</button>'+
       '</div>'+
+      '</div>'+
+      /* photo strip — first photo is main, rest are swipeable extras */
+      '<div style="display:flex;gap:7px;margin-top:9px;overflow-x:auto;padding-bottom:3px">'+photosHtml+'</div>'+
+      '<div style="font-size:10px;color:#aaa;margin-top:4px">第一張為主圖 · 可加多張（煮法、包裝等），客人可滑動睇 First photo = main; add more for cooking/packaging — customers swipe</div>'+
     '</div>';
   });
   wrap.innerHTML=html;
@@ -5920,26 +5938,40 @@ function scRenderList(){
 
 /* photo upload for showcase item */
 function scUploadPhoto(evt,itemId){
-  var file=evt.target.files[0];
-  if(!file) return;
-  var reader=new FileReader();
-  reader.onload=function(e){
-    var img=new Image();
-    img.onload=function(){
-      var canvas=document.createElement('canvas');
-      var MAX=500;
-      var ratio=Math.min(MAX/img.width,MAX/img.height,1);
-      canvas.width=Math.round(img.width*ratio);
-      canvas.height=Math.round(img.height*ratio);
-      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
-      var it=SC.items.find(function(i){return i.id===itemId;});
-      if(it) it.photo=canvas.toDataURL('image/jpeg',0.78);
-      scSaveDraft();scRenderList();
-      toast('Photo saved \u2713');
+  var files=Array.prototype.slice.call(evt.target.files||[]);
+  if(!files.length) return;
+  var it=SC.items.find(function(i){return i.id===itemId;});
+  if(!it) return;
+  if(!it.photos){it.photos=it.photo?[it.photo]:[];delete it.photo;}
+  var done=0;
+  toast('Adding '+files.length+' photo'+(files.length>1?'s':'')+'\u2026');
+  files.forEach(function(file){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        var canvas=document.createElement('canvas');
+        var MAX=500;
+        var ratio=Math.min(MAX/img.width,MAX/img.height,1);
+        canvas.width=Math.round(img.width*ratio);
+        canvas.height=Math.round(img.height*ratio);
+        canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+        it.photos.push(canvas.toDataURL('image/jpeg',0.78));
+        done++;
+        if(done===files.length){scSaveDraft();scRenderList();toast('\u2713 '+done+' photo'+(done>1?'s':'')+' added');}
+      };
+      img.src=e.target.result;
     };
-    img.src=e.target.result;
-  };
-  reader.readAsDataURL(file);
+    reader.readAsDataURL(file);
+  });
+}
+
+/* delete one photo from a product */
+function scDelPhoto(itemId,photoIdx){
+  var it=SC.items.find(function(i){return i.id===itemId;});
+  if(!it||!it.photos) return;
+  it.photos.splice(photoIdx,1);
+  scSaveDraft();scRenderList();
 }
 
 /* ── publish: write hills-showcase-pub.json to public Drive folder ── */
@@ -5952,7 +5984,7 @@ function scPublish(){
   var pub={
     title:cfg.title||'Hills Sweets NMC',
     intro:cfg.intro||'',
-    items:valid.map(function(i){return{name:i.name,price:i.price===''?null:i.price,unit:i.unit||'',desc:i.desc||'',photo:i.photo||null};}),
+    items:valid.map(function(i){var phs=i.photos||(i.photo?[i.photo]:[]);return{name:i.name,price:i.price===''?null:i.price,unit:i.unit||'',desc:i.desc||'',photos:phs,photo:phs[0]||null};}),
     publishedAt:new Date().toISOString()
   };
 
