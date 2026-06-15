@@ -6072,7 +6072,7 @@ function scRenderLibrary(){
           (priceStr?'<div style="font-size:11px;color:#1a3a2a;font-weight:600">'+esc(priceStr)+'</div>':'')+
         '</div>'+
         (isOn?
-          '<span style="font-size:11px;color:#16a34a;font-weight:700;white-space:nowrap">✓ On page</span>':
+          '<button class="btn btn-sm" style="white-space:nowrap;font-size:11px;color:#16a34a;background:#f0fdf4;border:1px solid #bbf7d0;font-weight:700" onclick="scLibRemove('+li+')">✓ On page</button>':
           '<button class="btn btn-o btn-sm" style="white-space:nowrap;font-size:12px" onclick="scLibReAdd('+li+')">+ Add</button>'
         )+
       '</div>';
@@ -6095,6 +6095,19 @@ function scLibReAdd(libIdx){
   SC.items.push({id:SC.nid++,name:l.name,price:l.price,unit:l.unit||'',desc:l.desc||'',photos:l.photos||[]});
   scSaveDraft();scRenderList();scRenderLibrary();
   toast('✓ '+l.name+' added to showcase');
+}
+
+/* remove a product from the current page (keeps it in library) */
+function scLibRemove(libIdx){
+  var lib=scLibLoad();
+  var q=(document.getElementById('sc-lib-search').value||'').toLowerCase().trim();
+  var filtered=q?lib.filter(function(l){return l.name.toLowerCase().indexOf(q)>=0;}):lib.slice();
+  filtered.sort(function(a,b){return (b.updatedAt||0)-(a.updatedAt||0);});
+  var l=filtered[libIdx];
+  if(!l) return;
+  SC.items=SC.items.filter(function(i){return i.name!==l.name;});
+  scSaveDraft();scRenderList();scRenderLibrary();
+  toast(l.name+' removed from page — still saved in library');
 }
 
 /* ── publish: write hills-showcase-pub.json to public Drive folder ── */
