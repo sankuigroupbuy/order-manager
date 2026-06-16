@@ -5529,6 +5529,7 @@ var OF={
   CFG_KEY:'om_of_cfg',
   PUB_KEY:'om_of_pub',
   PEND_KEY:'om_of_pending',
+  DISMISSED_KEY:'om_of_dismissed_rows',
   sel:new Set(),
   photos:{},
   notes:{},
@@ -6274,9 +6275,10 @@ function ofRefreshPending(){
         /* use sheetRow as unique key — rebuild pending from sheet every time */
         var existing=ofRead(OF.PEND_KEY)||[];
         var existingRows=existing.map(function(o){return o.sheetRow;}).filter(Boolean);
+        var dismissedRows=ofRead(OF.DISMISSED_KEY)||[];
 
         var newOrders=resp.orders.filter(function(o){
-          return existingRows.indexOf(o.rowIndex)<0;
+          return existingRows.indexOf(o.rowIndex)<0 && dismissedRows.indexOf(o.rowIndex)<0;
         }).map(function(o){
           return {
             name:        o.name,
@@ -6408,6 +6410,17 @@ function ofPA(pi){ /* add product */
 function ofPD(pi){ /* delete order */
   if(!confirm('Remove this entire order?')) return;
   var p=ofRead(OF.PEND_KEY)||[];
+  var removed=p[pi];
+  /* remember this sheet row so it's never re-pulled from the sheet */
+  if(removed&&removed.sheetRow){
+    var dismissed=ofRead(OF.DISMISSED_KEY)||[];
+    if(dismissed.indexOf(removed.sheetRow)<0){
+      dismissed.push(removed.sheetRow);
+      /* keep list from growing forever — last 500 is plenty */
+      if(dismissed.length>500) dismissed=dismissed.slice(-500);
+      ofSave(OF.DISMISSED_KEY,dismissed);
+    }
+  }
   p.splice(pi,1); ofSave(OF.PEND_KEY,p); ofRefreshPending();
 }
 function ofPN(pi,val){ /* edit customer name */
@@ -6463,6 +6476,14 @@ function ofImportAll(){
     ofSave(OF.PUB_KEY,pub);
     ofDriveWritePub(pub,null);
   }
+
+  /* mark all imported rows as dismissed so refresh never re-pulls them */
+  var dismissedAll=ofRead(OF.DISMISSED_KEY)||[];
+  pending.forEach(function(po){
+    if(po.sheetRow&&dismissedAll.indexOf(po.sheetRow)<0) dismissedAll.push(po.sheetRow);
+  });
+  if(dismissedAll.length>500) dismissedAll=dismissedAll.slice(-500);
+  ofSave(OF.DISMISSED_KEY,dismissedAll);
 
   ofSave(OF.PEND_KEY,[]);
 
