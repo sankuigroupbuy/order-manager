@@ -1090,6 +1090,12 @@ textarea{resize:vertical;min-height:60px}
           <button class="btn btn-o btn-sm" onclick="scCopyLink()">🔗 Copy page link</button>
           <span id="sc-pub-status" style="font-size:11px;color:#16a34a"></span>
         </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid #f4f4f4">
+          <span id="sc-views-badge" style="font-size:12px;font-weight:700;color:#1a3a2a;background:#f0fdf4;border:1px solid #bbf7d0;padding:4px 12px;border-radius:99px">👁 Loading views…</span>
+          <button class="btn btn-o btn-sm" onclick="scFetchViews()" title="Refresh">🔄</button>
+          <button class="btn btn-o btn-sm" onclick="scCopyNoTrackLink()">📵 Copy "don't count my visits" link</button>
+        </div>
+        <div style="font-size:10.5px;color:#aaa;margin-top:5px">Tap the "don't count my visits" link once on your own phone — after that, your own checks won't be counted.</div>
       </div>
     </div>
 
@@ -5844,7 +5850,7 @@ function scToggleOpen(){
   var open=b.style.display!=='none';
   b.style.display=open?'none':'block';
   btn.textContent=open?'Open \u25be':'Close \u25b4';
-  if(!open){scLoadConfig();scRenderList();}
+  if(!open){scLoadConfig();scRenderList();scFetchViews();}
 }
 
 function scLoadConfig(){
@@ -6188,6 +6194,49 @@ function scDriveWritePub(pubData,cb){
       doUpload(null);
     }
   }).catch(function(e){console.error(e);if(cb) cb(false);});
+}
+
+/* ── view count ── */
+var SC_VIEWS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbyaoVmbMkgmm6ODjdXHJGbP-KyNbFmxbIeCRDApbLd-jt3stNwxdSE8mrk16ufk8JcFqw/exec';
+
+function scFetchViews(){
+  var badge=document.getElementById('sc-views-badge');
+  if(badge) badge.textContent='\ud83d\udc41 Loading\u2026';
+  window.scViewsCallback=function(data){scRenderViews(data);};
+  fetch(SC_VIEWS_SCRIPT_URL+'?action=getviews')
+    .then(function(r){return r.json();})
+    .then(scRenderViews)
+    .catch(function(){
+      var s=document.createElement('script');
+      s.src=SC_VIEWS_SCRIPT_URL+'?action=getviews&callback=scViewsCallback';
+      s.onerror=function(){if(badge) badge.textContent='\ud83d\udc41 Unavailable';};
+      document.head.appendChild(s);
+    });
+}
+
+function scRenderViews(data){
+  var badge=document.getElementById('sc-views-badge');
+  if(!badge) return;
+  if(!data){badge.textContent='\ud83d\udc41 Unavailable';return;}
+  var total=data.total||0;
+  var today=0;
+  if(data.byDate){
+    /* Sydney date */
+    var now=new Date();
+    var sydDate=new Date(now.toLocaleString('en-US',{timeZone:'Australia/Sydney'}));
+    var y=sydDate.getFullYear(),m=(sydDate.getMonth()+1).toString().padStart(2,'0'),d=sydDate.getDate().toString().padStart(2,'0');
+    var key=y+'-'+m+'-'+d;
+    today=data.byDate[key]||0;
+  }
+  badge.textContent='\ud83d\udc41 '+total+' total \u00b7 '+today+' today';
+}
+
+function scCopyNoTrackLink(){
+  var url='https://sankuigroupbuy.github.io/menu/?notrack=1';
+  navigator.clipboard.writeText(url).then(function(){toast('Link copied \u2713 \u2014 open it once on your own phone');}).catch(function(){
+    var ta=document.createElement('textarea');ta.value=url;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    toast('Link copied: '+url);
+  });
 }
 
 function scCopyLink(){
