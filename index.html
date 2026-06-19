@@ -1944,7 +1944,7 @@ function saveOrder(){
   var status=document.getElementById('o-status').value;
   var items=oLines.filter(function(l){return l.s}).map(function(l){
     var p=sp(parseInt(l.s));
-    return{s:parseInt(l.s),q:parseInt(l.q)||1,sp:p?p.sell:0,cp:p?p.cost:0};
+    return{s:parseInt(l.s),q:parseFloat(l.q)||1,sp:p?p.sell:0,cp:p?p.cost:0};
   });
   var msg=document.getElementById('o-msg');
   if(!cid||!date||!items.length){msg.textContent='Please fill customer, date and at least one item.';msg.style.color='#dc2626';return}
