@@ -576,6 +576,7 @@ textarea{resize:vertical;min-height:60px}
     <div id="gd-section" style="display:flex;align-items:center;gap:6px;padding:0 8px;border-left:1px solid #e5e5e5;border-right:1px solid #e5e5e5">
       <svg width="14" height="14" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 27h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg>
       <span class="gd-status"><span class="gd-dot" id="gd-dot"></span><span id="gd-status-txt">Not connected</span></span>
+      <span id="gd-autosync-dot" title="Auto-sync" style="width:7px;height:7px;border-radius:50%;background:#16a34a;opacity:0;transition:opacity .3s;display:inline-block;margin:0 2px"></span>
       <button class="gd-btn" id="gd-connect-btn" onclick="gdConnect()" title="Connect Google Drive">Connect</button>
       <button class="gd-btn" id="gd-save-btn" onclick="gdSave()" title="Save to Google Drive" style="display:none">&#8593; Save</button>
       <button class="gd-btn" id="gd-load-btn" onclick="gdLoad()" title="Load from Google Drive" style="display:none">&#8595; Load</button>
@@ -1206,6 +1207,100 @@ function saveData(){
     localStorage.setItem(KEYS.runs,      JSON.stringify(D.runs));
     flashSaved();
   }catch(e){ console.warn('Storage save failed',e) }
+  scheduleAutoSync();
+}
+
+/* ════════════════════════════════════════════════════════════
+   AUTO-SYNC — debounced auto-save to Google Drive.
+   Fires ~30s after the last data change, so a burst of edits
+   (e.g. marking 10 orders paid) only triggers ONE save.
+   Never fires while a text input/textarea is actively focused,
+   to avoid interrupting typing. Silent — only shows a small
+   dot pulse in the topbar, no toast spam.
+   ════════════════════════════════════════════════════════════ */
+var autoSyncTimer = null;
+var AUTO_SYNC_DELAY_MS = 30000; /* 30 seconds after last change */
+
+/* if the page is being hidden/closed and a sync is pending, fire it immediately */
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState==='hidden' && autoSyncTimer){
+    clearTimeout(autoSyncTimer);
+    autoSyncTimer=null;
+    if(GD.accessToken) gdAutoSave();
+  }
+});
+
+function scheduleAutoSync(){
+  if(autoSyncTimer) clearTimeout(autoSyncTimer);
+  autoSyncTimer = setTimeout(runAutoSync, AUTO_SYNC_DELAY_MS);
+}
+
+function runAutoSync(){
+  autoSyncTimer = null;
+  /* guardrails — skip silently if any aren't met */
+  if(!GD.accessToken) return;                 /* Drive not connected */
+  if(document.getElementById('lock-screen') &&
+     document.getElementById('lock-screen').style.display!=='none') return; /* app locked */
+  var active=document.activeElement;
+  if(active && (active.tagName==='INPUT'||active.tagName==='TEXTAREA')) {
+    /* user is mid-typing — try again shortly instead of interrupting */
+    autoSyncTimer = setTimeout(runAutoSync, 5000);
+    return;
+  }
+  gdAutoSave();
+}
+
+function gdAutoSave(){
+  if(!GD.accessToken) return;
+  var dot=document.getElementById('gd-autosync-dot');
+  if(dot){dot.style.opacity='1';dot.title='Auto-saving…';}
+
+  var payload=JSON.stringify({
+    version:1,
+    exported:new Date().toISOString(),
+    customers:D.customers,
+    stock:D.stock,
+    orders:D.orders,
+    priceLog:D.priceLog,
+    runs:D.runs,
+    nid:D.nid
+  },null,2);
+
+  gdGetFileId(function(fileId){
+    var boundary='boundary_om_auto_'+Date.now();
+    var body=
+      '--'+boundary+'\r\n'+
+      'Content-Type: application/json\r\n\r\n'+
+      JSON.stringify({name:GD.FILE_NAME})+'\r\n'+
+      '--'+boundary+'\r\n'+
+      'Content-Type: application/json\r\n\r\n'+
+      payload+'\r\n'+
+      '--'+boundary+'--';
+
+    fetch('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=multipart',{
+      method:'PATCH',
+      headers:{
+        Authorization:'Bearer '+GD.accessToken,
+        'Content-Type':'multipart/related; boundary='+boundary
+      },
+      body:body
+    }).then(function(r){
+      if(r.ok){
+        var now=new Date();
+        var timeStr=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+        localStorage.setItem('gd_last_saved', new Date().toISOString());
+        if(dot){dot.style.opacity='0';dot.title='Last auto-saved '+timeStr;}
+        var gdStatusTxt=document.getElementById('gd-status-txt');
+        /* quietly note last autosave time without a disruptive toast */
+        console.log('Auto-saved to Drive at '+timeStr);
+      } else {
+        if(dot){dot.style.opacity='0';dot.title='Auto-save failed — will retry on next change';}
+        if(r.status===401){ gdClearToken(); gdShowDisconnected(); }
+      }
+    }).catch(function(){
+      if(dot){dot.style.opacity='0';dot.title='Auto-save failed — will retry on next change';}
+    });
+  });
 }
 
 function clearAllData(){
