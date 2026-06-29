@@ -1255,6 +1255,10 @@ function gdAutoSave(){
   var dot=document.getElementById('gd-autosync-dot');
   if(dot){dot.style.opacity='1';dot.title='Auto-saving…';}
 
+  /* include showcase + order form drafts so they sync across devices */
+  var scDraft=ofRead(SC.CFG_KEY)||null;
+  var ofDraft=ofRead(OF.CFG_KEY)||null;
+  var scLib=ofRead(SC_LIB_KEY)||[];
   var payload=JSON.stringify({
     version:1,
     exported:new Date().toISOString(),
@@ -1263,7 +1267,10 @@ function gdAutoSave(){
     orders:D.orders,
     priceLog:D.priceLog,
     runs:D.runs,
-    nid:D.nid
+    nid:D.nid,
+    showcaseDraft:scDraft,
+    orderFormDraft:ofDraft,
+    showcaseLibrary:scLib
   },null,2);
 
   gdGetFileId(function(fileId){
@@ -4932,6 +4939,9 @@ function gdSave(){
   var saveBtn=document.getElementById('gd-save-btn');
   saveBtn.classList.add('loading');
 
+  var scDraft2=ofRead(SC.CFG_KEY)||null;
+  var ofDraft2=ofRead(OF.CFG_KEY)||null;
+  var scLib2=ofRead(SC_LIB_KEY)||[];
   var payload=JSON.stringify({
     version:1,
     exported:new Date().toISOString(),
@@ -4940,7 +4950,10 @@ function gdSave(){
     orders:D.orders,
     priceLog:D.priceLog,
     runs:D.runs,
-    nid:D.nid
+    nid:D.nid,
+    showcaseDraft:scDraft2,
+    orderFormDraft:ofDraft2,
+    showcaseLibrary:scLib2
   },null,2);
 
   gdGetFileId(function(fileId){
@@ -5029,6 +5042,10 @@ function gdLoad(){
       D.priceLog=payload.priceLog||[];
       D.runs=payload.runs||[];
       D.nid=payload.nid||1;
+      /* restore showcase + order form drafts if present in backup */
+      if(payload.showcaseDraft) ofSave(SC.CFG_KEY, payload.showcaseDraft);
+      if(payload.orderFormDraft) ofSave(OF.CFG_KEY, payload.orderFormDraft);
+      if(payload.showcaseLibrary&&payload.showcaseLibrary.length) ofSave(SC_LIB_KEY, payload.showcaseLibrary);
       saveData();
       selCust=null;
       /* reset Order Summary filter to show all orders after load */
