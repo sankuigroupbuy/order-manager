@@ -541,6 +541,21 @@ textarea{resize:vertical;min-height:60px}
 </head>
 <body>
 
+<!-- ── Splash Screen ── -->
+<div id="splash-screen" style="position:fixed;inset:0;z-index:99999;background:#0b0906;display:flex;align-items:center;justify-content:center;transition:opacity 0.8s ease">
+  <iframe src="splash.html" style="width:100%;height:100%;border:none" allowtransparency="true"></iframe>
+  <div onclick="dismissSplash()" style="position:absolute;bottom:28px;right:28px;color:rgba(255,255,255,0.3);font-size:12px;cursor:pointer;font-family:-apple-system,sans-serif;user-select:none">tap to skip ›</div>
+</div>
+<script>
+function dismissSplash(){
+  var s=document.getElementById('splash-screen');
+  if(!s) return;
+  s.style.opacity='0';
+  setTimeout(function(){if(s.parentNode)s.parentNode.removeChild(s);},800);
+}
+setTimeout(dismissSplash,4500);
+</script>
+
 <div id="lock-idle-bar" style="width:100%"></div>
 <div id="lock-screen">
   <div class="lock-box">
