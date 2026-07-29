@@ -1257,7 +1257,13 @@ function gdAutoSave(){
   if(dot){dot.style.opacity='1';dot.title='Auto-saving…';}
 
   /* include showcase + order form drafts so they sync across devices */
-  var scDraft=ofRead(SC.CFG_KEY)||null;
+  /* include showcase WITH photos — photos stripped from localStorage but kept in memory */
+  var scDraftWithPhotos={
+    title:(document.getElementById('sc-title')||{}).value||'',
+    intro:(document.getElementById('sc-intro')||{}).value||'',
+    items:SC.items, /* full items with photos[] in memory */
+    nid:SC.nid
+  };
   var ofDraft=ofRead(OF.CFG_KEY)||null;
   var scLib=ofRead(SC_LIB_KEY)||[];
   var payload=JSON.stringify({
@@ -1269,7 +1275,7 @@ function gdAutoSave(){
     priceLog:D.priceLog,
     runs:D.runs,
     nid:D.nid,
-    showcaseDraft:scDraft,
+    showcaseDraft:scDraftWithPhotos,
     orderFormDraft:ofDraft,
     showcaseLibrary:scLib
   },null,2);
@@ -4871,7 +4877,12 @@ function gdSave(){
   var saveBtn=document.getElementById('gd-save-btn');
   saveBtn.classList.add('loading');
 
-  var scDraft2=ofRead(SC.CFG_KEY)||null;
+  var scDraftAuto={
+    title:(document.getElementById('sc-title')||{}).value||'',
+    intro:(document.getElementById('sc-intro')||{}).value||'',
+    items:SC.items,
+    nid:SC.nid
+  };
   var ofDraft2=ofRead(OF.CFG_KEY)||null;
   var scLib2=ofRead(SC_LIB_KEY)||[];
   var payload=JSON.stringify({
@@ -4883,7 +4894,7 @@ function gdSave(){
     priceLog:D.priceLog,
     runs:D.runs,
     nid:D.nid,
-    showcaseDraft:scDraft2,
+    showcaseDraft:scDraftAuto,
     orderFormDraft:ofDraft2,
     showcaseLibrary:scLib2
   },null,2);
@@ -4975,7 +4986,18 @@ function gdLoad(){
       D.runs=payload.runs||[];
       D.nid=payload.nid||1;
       /* restore showcase + order form drafts if present in backup */
-      if(payload.showcaseDraft) ofSave(SC.CFG_KEY, payload.showcaseDraft);
+      if(payload.showcaseDraft){
+        /* restore full showcase including photos into memory */
+        SC.items=payload.showcaseDraft.items||[];
+        SC.nid=payload.showcaseDraft.nid||(SC.items.length?Math.max.apply(null,SC.items.map(function(i){return i.id;}))+1:1);
+        /* save text-only version to localStorage */
+        var draftNoPhotos={
+          title:payload.showcaseDraft.title||'',
+          intro:payload.showcaseDraft.intro||'',
+          items:SC.items.map(function(it){return {id:it.id,name:it.name,price:it.price,unit:it.unit,desc:it.desc,photos:[]};})
+        };
+        ofSave(SC.CFG_KEY, draftNoPhotos);
+      }
       if(payload.orderFormDraft) ofSave(OF.CFG_KEY, payload.orderFormDraft);
       if(payload.showcaseLibrary&&payload.showcaseLibrary.length) ofSave(SC_LIB_KEY, payload.showcaseLibrary);
       saveData();
@@ -5899,25 +5921,40 @@ function scToggleOpen(){
 }
 
 function scLoadConfig(){
+  /* if SC.items already populated from gdLoad (with photos), don't overwrite */
+  if(SC.items&&SC.items.length>0){
+    /* just restore title/intro from localStorage */
+    var cfg=ofRead(SC.CFG_KEY);
+    if(cfg){
+      document.getElementById('sc-title').value=cfg.title||'';
+      document.getElementById('sc-intro').value=cfg.intro||'';
+    }
+    scUpdateBadge();return;
+  }
   var cfg=ofRead(SC.CFG_KEY);
   if(!cfg) return;
   document.getElementById('sc-title').value=cfg.title||'';
   document.getElementById('sc-intro').value=cfg.intro||'';
-  SC.items=cfg.items||[];
+  SC.items=cfg.items||[]; /* photos will be empty [] — that's fine, user re-uploads or loads from Drive */
   SC.nid=cfg.nid||(SC.items.length?Math.max.apply(null,SC.items.map(function(i){return i.id;}))+1:1);
   scUpdateBadge();
 }
 
 function scSaveDraft(){
+  /* strip photos before saving to localStorage — they stay in SC.items memory
+     and are persisted via Drive backup (gdSave) and published JSON (scPublish) */
+  var itemsNoPhotos=SC.items.map(function(it){
+    return {id:it.id,name:it.name,price:it.price,unit:it.unit,desc:it.desc,photos:[]};
+  });
   var cfg={
     title:document.getElementById('sc-title').value.trim(),
     intro:document.getElementById('sc-intro').value.trim(),
-    items:SC.items,
+    items:itemsNoPhotos,
     nid:SC.nid
   };
-  ofSave(SC.CFG_KEY,cfg);
+  try{ofSave(SC.CFG_KEY,cfg);}catch(e){console.warn('scSaveDraft storage error:',e);}
   scUpdateBadge();
-  scLibMerge(SC.items); /* auto-save all named items to library */
+  scLibMerge(SC.items); /* library gets full photos for Drive publish */
   return cfg;
 }
 
