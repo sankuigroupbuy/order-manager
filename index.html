@@ -6401,20 +6401,14 @@ function scLibReAddByName(name){
   var lib=scLibLoad();
   var l=lib.find(function(item){return item.name===name;});
   if(!l) return;
-  /* check not already on page */
   if(SC.items.find(function(i){return i.name===l.name;})){
     toast(l.name+' is already on the page');return;
   }
+  /* add immediately with no photos — instant response */
   var newId=SC.nid++;
-  var lk=l.libKey||(l.libId||l.name);
-  photoStore.getAll(function(all){
-    var photos=[];var idx=0;
-    while(all['lib:'+lk+':'+idx]){photos.push(all['lib:'+lk+':'+idx]);idx++;}
-    photos.forEach(function(p,i){photoStore.save('sc:'+newId+':'+i,p);});
-    SC.items.push({id:newId,name:l.name,price:l.price,unit:l.unit||'',desc:l.desc||'',photos:photos});
-    scSaveDraft();scRenderList();scRenderLibrary();
-    toast('\u2713 '+l.name+' added to showcase');
-  });
+  SC.items.push({id:newId,name:l.name,price:l.price,unit:l.unit||'',desc:l.desc||'',photos:[]});
+  scSaveDraft();scRenderList();scRenderLibrary();
+  toast('\u2713 '+l.name+' added — upload photos to update');
 }
 
 /* remove a product from the current page (keeps it in library) */
