@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#ffffff">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
@@ -3717,17 +3717,15 @@ function renderSummary(){
 }
 
 function exportSummaryExcel(){
-  if(typeof ExcelJS==='undefined'){toast('Excel library loading, please try again in 5 seconds.');return}
+  if(typeof XLSX==='undefined'){toast('Loading Excel library...');return}
   var ords=getSummaryOrders();
   if(!ords.length){toast('No orders to export.');return}
-
-  /* ── merge — store itemStatus per item from its own order ── */
   var mergedMap={};
   ords.forEach(function(o){
     var key=o.cid+'|'+o.date;
     if(!mergedMap[key]) mergedMap[key]={cid:o.cid,date:o.date,items:[]};
     o.items.forEach(function(it){
-      var ex=mergedMap[key].items.find(function(x){return x.s===it.s&&(x.sp||0)===(it.sp||0)&&x.itemStatus===o.status;});
+      var ex=mergedMap[key].items.find(function(x){return x.s===it.s&&(x.sp||0)===(it.sp||0);});
       if(ex){ex.q=parseFloat((ex.q+it.q).toFixed(2));if(it.collected)ex.collected=true;}
       else{mergedMap[key].items.push({s:it.s,q:it.q,sp:it.sp,cp:it.cp,collected:!!it.collected,itemStatus:o.status});}
     });
@@ -3736,133 +3734,75 @@ function exportSummaryExcel(){
     var na=(cp(a.cid)||{name:''}).name,nb=(cp(b.cid)||{name:''}).name;
     return na.localeCompare(nb)||a.date.localeCompare(b.date);
   });
-
-  var wb=new ExcelJS.Workbook();
-  wb.creator='Hills Sweets NMC';
-
-  /* ── style helpers ── */
-  var BLU={type:'pattern',pattern:'solid',fgColor:{argb:'FFBDD7EE'}};
-  var NAVY={type:'pattern',pattern:'solid',fgColor:{argb:'FF1E3A5F'}};
-  var COLL={type:'pattern',pattern:'solid',fgColor:{argb:'FFC6EFCE'}};
-  var NCOLL={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFC7CE'}};
-  function styleHeader(row){
-    row.eachCell(function(cell){
-      cell.font={bold:true,size:11};
-      cell.fill=BLU;
-      cell.alignment={horizontal:'center',vertical:'middle'};
-      cell.border={bottom:{style:'thin',color:{argb:'FF9DC3E6'}}};
-    });
-    row.height=18;
-  }
-  function styleTotal(row,cname,blockTotal){
-    row.eachCell(function(cell,cn){
-      cell.fill=BLU;
-      if(cn===1){cell.font={bold:true,size:11};cell.value=cname+' Total';cell.alignment={horizontal:'left'};}
-      if(cn===5){cell.font={bold:true,size:11};cell.value=parseFloat(blockTotal.toFixed(2));cell.numFmt='0.00';}
-    });
-    row.height=16;
-  }
-  function styleGrand(row){
-    row.eachCell(function(cell){
-      cell.font={bold:true,color:{argb:'FFFFFFFF'},size:12};
-      cell.fill=NAVY;
-      cell.alignment={vertical:'middle'};
-    });
-    row.height=20;
-  }
-
-  /* ── Sheet 1: Order Summary ── */
-  var ws1=wb.addWorksheet('Order Summary');
-  ws1.columns=[
-    {width:20},{width:30},{width:14},{width:7},{width:14},{width:15},{width:12},{width:10}
-  ];
   var HDR=['Order by','Product','Unit price (A$)','Qty','Subtotal (A$)','Collect Y/N','Order date','Status'];
-  var grandTotal=0,prodMap={};
-
+  var ws1_data=[],ws1_meta=[],grandTotal=0,prodMap={};
   merged.forEach(function(m,bi){
     var c=cp(m.cid),cname=c?c.name:'Unknown',blockTotal=0;
-
-    /* header row */
-    styleHeader(ws1.addRow(HDR));
-
-    /* item rows */
+    ws1_data.push(HDR.slice());ws1_meta.push('header');
     m.items.forEach(function(it){
       var p=sp(it.s);if(!p)return;
       var sell=it.sp!=null?it.sp:p.sell;
       var sub=parseFloat((sell*it.q).toFixed(2));
       blockTotal+=sub;
-      var isColl=!!it.collected;
-      var row=ws1.addRow([cname,p.name,parseFloat(sell.toFixed(2)),parseFloat(it.q.toFixed(2)),sub,isColl?'Collected':'Not collected',m.date,it.itemStatus||'unpaid']);
-      /* number formats */
-      row.getCell(3).numFmt='0.00';
-      row.getCell(4).numFmt='0.00';
-      row.getCell(5).numFmt='0.00';
-      /* collected column F styling */
-      var fCell=row.getCell(6);
-      if(isColl){
-        fCell.font={bold:true,color:{argb:'FF276221'},size:11};
-        fCell.fill=COLL;
-        fCell.alignment={horizontal:'center'};
-        /* tint whole row */
-        row.eachCell(function(cell,cn){if(cn!==6) cell.fill=COLL;});
-      } else {
-        fCell.font={bold:true,color:{argb:'FF9C0006'},size:11};
-        fCell.fill=NCOLL;
-        fCell.alignment={horizontal:'center'};
-      }
-      /* accumulate sheet 2 */
-      if(!prodMap[it.s]) prodMap[it.s]={name:p.name,qty:0,revenue:0,cat:p.cat||'Others'};
+      ws1_data.push([cname,p.name,parseFloat(sell.toFixed(2)),parseFloat(it.q.toFixed(2)),sub,
+        it.collected?'Collected':'Not collected',m.date,it.itemStatus||'unpaid']);
+      ws1_meta.push(it.collected?'coll':'item');
+      if(!prodMap[it.s])prodMap[it.s]={name:p.name,qty:0,revenue:0,cat:p.cat||'Others'};
       prodMap[it.s].qty=parseFloat((prodMap[it.s].qty+it.q).toFixed(2));
       prodMap[it.s].revenue=parseFloat((prodMap[it.s].revenue+sub).toFixed(2));
     });
-
     grandTotal+=blockTotal;
-
-    /* customer total row */
-    var totalRow=ws1.addRow([cname+' Total','','','',parseFloat(blockTotal.toFixed(2)),'','','']);
-    styleTotal(totalRow,cname,blockTotal);
-
-    /* blank separator */
-    if(bi<merged.length-1) ws1.addRow([]);
+    ws1_data.push([cname+' Total','','','',parseFloat(blockTotal.toFixed(2)),'','','']);
+    ws1_meta.push('total');
+    if(bi<merged.length-1){ws1_data.push(new Array(8).fill(''));ws1_meta.push('blank');}
   });
-
-  /* grand total */
-  ws1.addRow([]);
-  var grandRow=ws1.addRow(['GRAND TOTAL','','','',parseFloat(grandTotal.toFixed(2)),'','','']);
-  grandRow.getCell(5).numFmt='0.00';
-  styleGrand(grandRow);
-
-  /* freeze top row, auto-filter */
-  ws1.views=[{state:'frozen',ySplit:1}];
-
-  /* ── Sheet 2: Products by Qty ── */
-  var ws2=wb.addWorksheet('Products by Qty');
-  ws2.columns=[{width:32},{width:16},{width:12},{width:18}];
-  styleHeader(ws2.addRow(['Product','Category','Total Qty','Total Revenue (A$)']));
-
+  ws1_data.push(new Array(8).fill(''));
+  ws1_data.push(['GRAND TOTAL','','','',parseFloat(grandTotal.toFixed(2)),'','','']);
+  ws1_meta.push('blank');ws1_meta.push('grand');
+  var ws1=XLSX.utils.aoa_to_sheet(ws1_data);
+  ws1['!cols']=[{wch:20},{wch:30},{wch:14},{wch:7},{wch:14},{wch:15},{wch:12},{wch:10}];
+  var BLU={patternType:'solid',fgColor:{rgb:'BDD7EE'}};
+  var NAVY={patternType:'solid',fgColor:{rgb:'1E3A5F'}};
+  var COLL={patternType:'solid',fgColor:{rgb:'C6EFCE'}};
+  var NCOLL={patternType:'solid',fgColor:{rgb:'FFC7CE'}};
+  var COLS=['A','B','C','D','E','F','G','H'];
+  ws1_meta.forEach(function(type,ri){
+    var rowNum=ri+1;
+    COLS.forEach(function(col){
+      var addr=col+rowNum;
+      if(!ws1[addr])ws1[addr]={t:'s',v:''};
+      if(type==='header'){ws1[addr].s={font:{bold:true},fill:BLU,alignment:{horizontal:'center'}};}
+      else if(type==='total'){ws1[addr].s={fill:BLU};if(col==='A'||col==='E')ws1[addr].s.font={bold:true};}
+      else if(type==='grand'){ws1[addr].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:NAVY};}
+      else if(type==='coll'){ws1[addr].s=col==='F'?{font:{bold:true,color:{rgb:'276221'}},fill:COLL,alignment:{horizontal:'center'}}:{fill:COLL};}
+      else if(type==='item'&&col==='F'){ws1[addr].s={font:{bold:true,color:{rgb:'9C0006'}},fill:NCOLL,alignment:{horizontal:'center'}};}
+    });
+  });
+  var ws2_data=[['Product','Category','Total Qty','Total Revenue (A$)']];
+  var ws2_meta=['header'];
   var prodList=Object.values(prodMap).sort(function(a,b){return b.qty-a.qty;});
   var tQty=0,tRev=0;
   prodList.forEach(function(p){
-    var r=ws2.addRow([p.name,p.cat,p.qty,p.revenue]);
-    r.getCell(3).numFmt='0.00';r.getCell(4).numFmt='0.00';
-    tQty=parseFloat((tQty+p.qty).toFixed(2));
-    tRev=parseFloat((tRev+p.revenue).toFixed(2));
+    ws2_data.push([p.name,p.cat,p.qty,p.revenue]);ws2_meta.push('item');
+    tQty=parseFloat((tQty+p.qty).toFixed(2));tRev=parseFloat((tRev+p.revenue).toFixed(2));
   });
-  var gRow2=ws2.addRow(['TOTAL','',tQty,tRev]);
-  gRow2.getCell(3).numFmt='0.00';gRow2.getCell(4).numFmt='0.00';
-  styleGrand(gRow2);
-
-  /* ── write file ── */
+  ws2_data.push(['TOTAL','',tQty,tRev]);ws2_meta.push('grand');
+  var ws2=XLSX.utils.aoa_to_sheet(ws2_data);
+  ws2['!cols']=[{wch:32},{wch:16},{wch:12},{wch:18}];
+  ws2_meta.forEach(function(type,ri){
+    ['A','B','C','D'].forEach(function(col){
+      var addr=col+(ri+1);
+      if(!ws2[addr])ws2[addr]={t:'s',v:''};
+      if(type==='header')ws2[addr].s={font:{bold:true},fill:BLU,alignment:{horizontal:'center'}};
+      else if(type==='grand')ws2[addr].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:NAVY};
+    });
+  });
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws1,'Order Summary');
+  XLSX.utils.book_append_sheet(wb,ws2,'Products by Qty');
   var today=new Date().toISOString().split('T')[0];
-  wb.xlsx.writeBuffer().then(function(buf){
-    var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-    var a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download='order-summary-'+today+'.xlsx';
-    a.click();
-    URL.revokeObjectURL(a.href);
-    toast('Summary exported ✓');
-  }).catch(function(e){toast('Export failed: '+e.message);});
+  XLSX.writeFile(wb,'order-summary-'+today+'.xlsx');
+  toast('Summary exported \u2713');
 }
 
 function sumTogglePaid(cid,date){
@@ -6202,14 +6142,14 @@ function scRenderLibrary(){
 function scLibReAddByName(name){
   var lib=scLibLoad();
   var l=lib.find(function(item){return item.name===name;});
-  if(!l) return;
-  /* check not already on page */
-  if(SC.items.find(function(i){return i.name===l.name;})){
-    toast(l.name+' is already on the page');return;
+  if(!l){toast('Not found in library');return;}
+  if(SC.items.find(function(i){return i.name===name;})){
+    toast(name+' is already on the page');return;
   }
-  SC.items.push({id:SC.nid++,name:l.name,price:l.price,unit:l.unit||'',desc:l.desc||'',photos:l.photos||[]});
-  scSaveDraft();scRenderList();scRenderLibrary();
-  toast('✓ '+l.name+' added to showcase');
+  SC.items.push({id:SC.nid++,name:l.name,price:l.price||'',unit:l.unit||'',desc:l.desc||'',photos:[]});
+  try{scSaveDraft();}catch(e){console.error(e);}
+  scRenderList();scRenderLibrary();
+  toast('✓ '+l.name+' added');
 }
 
 /* remove a product from the current page (keeps it in library) */
