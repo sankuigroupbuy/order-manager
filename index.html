@@ -3742,8 +3742,7 @@ function exportSummaryExcel(){
     m.items.forEach(function(it){
       var p=sp(it.s);if(!p)return;
       var sell=it.sp!=null?it.sp:p.sell;
-      var sub=parseFloat((sell*it.q).toFixed(2));
-      blockTotal+=sub;
+      var sub=parseFloat((sell*it.q).toFixed(2));blockTotal+=sub;
       ws1_data.push([cname,p.name,parseFloat(sell.toFixed(2)),parseFloat(it.q.toFixed(2)),sub,
         it.collected?'Collected':'Not collected',m.date,it.itemStatus||'unpaid']);
       ws1_meta.push(it.collected?'coll':'item');
@@ -3752,8 +3751,7 @@ function exportSummaryExcel(){
       prodMap[it.s].revenue=parseFloat((prodMap[it.s].revenue+sub).toFixed(2));
     });
     grandTotal+=blockTotal;
-    ws1_data.push([cname+' Total','','','',parseFloat(blockTotal.toFixed(2)),'','','']);
-    ws1_meta.push('total');
+    ws1_data.push([cname+' Total','','','',parseFloat(blockTotal.toFixed(2)),'','','']);ws1_meta.push('total');
     if(bi<merged.length-1){ws1_data.push(new Array(8).fill(''));ws1_meta.push('blank');}
   });
   ws1_data.push(new Array(8).fill(''));
@@ -3765,11 +3763,9 @@ function exportSummaryExcel(){
   var NAVY={patternType:'solid',fgColor:{rgb:'1E3A5F'}};
   var COLL={patternType:'solid',fgColor:{rgb:'C6EFCE'}};
   var NCOLL={patternType:'solid',fgColor:{rgb:'FFC7CE'}};
-  var COLS=['A','B','C','D','E','F','G','H'];
-  ws1_meta.forEach(function(type,ri){
-    var rowNum=ri+1;
-    COLS.forEach(function(col){
-      var addr=col+rowNum;
+  ['A','B','C','D','E','F','G','H'].forEach(function(col){
+    ws1_meta.forEach(function(type,ri){
+      var addr=col+(ri+1);
       if(!ws1[addr])ws1[addr]={t:'s',v:''};
       if(type==='header'){ws1[addr].s={font:{bold:true},fill:BLU,alignment:{horizontal:'center'}};}
       else if(type==='total'){ws1[addr].s={fill:BLU};if(col==='A'||col==='E')ws1[addr].s.font={bold:true};}
@@ -3778,21 +3774,17 @@ function exportSummaryExcel(){
       else if(type==='item'&&col==='F'){ws1[addr].s={font:{bold:true,color:{rgb:'9C0006'}},fill:NCOLL,alignment:{horizontal:'center'}};}
     });
   });
-  var ws2_data=[['Product','Category','Total Qty','Total Revenue (A$)']];
-  var ws2_meta=['header'];
-  var prodList=Object.values(prodMap).sort(function(a,b){return b.qty-a.qty;});
-  var tQty=0,tRev=0;
-  prodList.forEach(function(p){
+  var ws2_data=[['Product','Category','Total Qty','Total Revenue (A$)']],ws2_meta=['header'];
+  Object.values(prodMap).sort(function(a,b){return b.qty-a.qty;}).forEach(function(p){
     ws2_data.push([p.name,p.cat,p.qty,p.revenue]);ws2_meta.push('item');
-    tQty=parseFloat((tQty+p.qty).toFixed(2));tRev=parseFloat((tRev+p.revenue).toFixed(2));
   });
-  ws2_data.push(['TOTAL','',tQty,tRev]);ws2_meta.push('grand');
+  var tQ=0,tR=0;ws2_data.slice(1).forEach(function(r){tQ+=r[2];tR+=r[3];});
+  ws2_data.push(['TOTAL','',parseFloat(tQ.toFixed(2)),parseFloat(tR.toFixed(2))]);ws2_meta.push('grand');
   var ws2=XLSX.utils.aoa_to_sheet(ws2_data);
   ws2['!cols']=[{wch:32},{wch:16},{wch:12},{wch:18}];
-  ws2_meta.forEach(function(type,ri){
-    ['A','B','C','D'].forEach(function(col){
-      var addr=col+(ri+1);
-      if(!ws2[addr])ws2[addr]={t:'s',v:''};
+  ['A','B','C','D'].forEach(function(col){
+    ws2_meta.forEach(function(type,ri){
+      var addr=col+(ri+1);if(!ws2[addr])ws2[addr]={t:'s',v:''};
       if(type==='header')ws2[addr].s={font:{bold:true},fill:BLU,alignment:{horizontal:'center'}};
       else if(type==='grand')ws2[addr].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:NAVY};
     });
@@ -3800,8 +3792,7 @@ function exportSummaryExcel(){
   var wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws1,'Order Summary');
   XLSX.utils.book_append_sheet(wb,ws2,'Products by Qty');
-  var today=new Date().toISOString().split('T')[0];
-  XLSX.writeFile(wb,'order-summary-'+today+'.xlsx');
+  XLSX.writeFile(wb,'order-summary-'+new Date().toISOString().split('T')[0]+'.xlsx');
   toast('Summary exported \u2713');
 }
 
@@ -6131,31 +6122,38 @@ function scRenderLibrary(){
           (priceStr?'<div style="font-size:11px;color:#1a3a2a;font-weight:600">'+esc(priceStr)+'</div>':'')+
         '</div>'+
         (isOn?
-          '<button class="btn btn-sm" style="white-space:nowrap;font-size:11px;color:#16a34a;background:#f0fdf4;border:1px solid #bbf7d0;font-weight:700" onclick="scLibRemoveByName('+JSON.stringify(l.name)+')">✓ On page</button>':
-          '<button class="btn btn-o btn-sm" style="white-space:nowrap;font-size:12px" onclick="scLibReAddByName('+JSON.stringify(l.name)+')">+ Add</button>'
+          '<button class="btn btn-sm" style="white-space:nowrap;font-size:11px;color:#16a34a;background:#f0fdf4;border:1px solid #bbf7d0;font-weight:700" onclick="scLibRemove('+li+')">✓ On page</button>':
+          '<button class="btn btn-o btn-sm" style="white-space:nowrap;font-size:12px" onclick="scLibReAdd('+li+')">+ Add</button>'
         )+
       '</div>';
   });
   list.innerHTML=html;
 }
 
-function scLibReAddByName(name){
+function scLibReAdd(libIdx){
   var lib=scLibLoad();
-  var l=lib.find(function(item){return item.name===name;});
-  if(!l){toast('Not found in library');return;}
-  if(SC.items.find(function(i){return i.name===name;})){
-    toast(name+' is already on the page');return;
+  /* re-sort to match scRenderLibrary order */
+  var q=(document.getElementById('sc-lib-search').value||'').toLowerCase().trim();
+  var filtered=q?lib.filter(function(l){return l.name.toLowerCase().indexOf(q)>=0;}):lib.slice();
+  filtered.sort(function(a,b){return (b.updatedAt||0)-(a.updatedAt||0);});
+  var l=filtered[libIdx];
+  if(!l) return;
+  /* check not already on page */
+  if(SC.items.find(function(i){return i.name===l.name;})){
+    toast(l.name+' is already on the page');return;
   }
-  SC.items.push({id:SC.nid++,name:l.name,price:l.price||'',unit:l.unit||'',desc:l.desc||'',photos:[]});
-  try{scSaveDraft();}catch(e){console.error(e);}
-  scRenderList();scRenderLibrary();
-  toast('✓ '+l.name+' added');
+  SC.items.push({id:SC.nid++,name:l.name,price:l.price,unit:l.unit||'',desc:l.desc||'',photos:l.photos||[]});
+  scSaveDraft();scRenderList();scRenderLibrary();
+  toast('✓ '+l.name+' added to showcase');
 }
 
 /* remove a product from the current page (keeps it in library) */
-function scLibRemoveByName(name){
+function scLibRemove(libIdx){
   var lib=scLibLoad();
-  var l=lib.find(function(item){return item.name===name;});
+  var q=(document.getElementById('sc-lib-search').value||'').toLowerCase().trim();
+  var filtered=q?lib.filter(function(l){return l.name.toLowerCase().indexOf(q)>=0;}):lib.slice();
+  filtered.sort(function(a,b){return (b.updatedAt||0)-(a.updatedAt||0);});
+  var l=filtered[libIdx];
   if(!l) return;
   SC.items=SC.items.filter(function(i){return i.name!==l.name;});
   scSaveDraft();scRenderList();scRenderLibrary();
