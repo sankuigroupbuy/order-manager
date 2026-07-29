@@ -1089,6 +1089,7 @@ textarea{resize:vertical;min-height:60px}
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid #eee;padding-top:12px">
           <button class="btn btn-p" onclick="scPublish()">🚀 Publish to page</button>
           <button class="btn btn-o btn-sm" onclick="scCopyLink()">🔗 Copy page link</button>
+          <button class="btn btn-o btn-sm" onclick="scRestoreLibrary()" title="Restore Product Library from your last published showcase data in Drive">♻️ Restore Library from Drive</button>
           <span id="sc-pub-status" style="font-size:11px;color:#16a34a"></span>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid #f4f4f4">
@@ -6280,6 +6281,62 @@ function scCopyNoTrackLink(){
   navigator.clipboard.writeText(url).then(function(){toast('Link copied \u2713 \u2014 open it once on your own phone');}).catch(function(){
     var ta=document.createElement('textarea');ta.value=url;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
     toast('Link copied: '+url);
+  });
+}
+
+/* ── Restore Product Library from last published showcase in Drive ── */
+function scRestoreLibrary(){
+  if(!GD.accessToken){
+    toast('\u26a0\ufe0f Please connect to Google Drive first');
+    return;
+  }
+  toast('Restoring library from Drive\u2026');
+  /* find hills-showcase-pub.json in the public Drive folder */
+  fetch('https://www.googleapis.com/drive/v3/files?q=name%3D%22'+encodeURIComponent(SC.PUB_FILENAME)+'%22+and+%22'+OF.DRIVE_FOLDER+'%22+in+parents+and+trashed%3Dfalse&fields=files(id,name)',{
+    headers:{Authorization:'Bearer '+GD.accessToken}
+  }).then(function(r){return r.json();})
+  .then(function(d){
+    if(!d.files||!d.files.length){
+      toast('No published showcase found in Drive');return;
+    }
+    var fileId=d.files[0].id;
+    return fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media',{
+      headers:{Authorization:'Bearer '+GD.accessToken}
+    });
+  }).then(function(r){
+    if(!r) return;
+    return r.json();
+  }).then(function(data){
+    if(!data||!data.items||!data.items.length){
+      toast('Published showcase is empty');return;
+    }
+    /* rebuild library from published items */
+    var lib=scLibLoad();
+    var added=0,updated=0;
+    data.items.forEach(function(it){
+      if(!(it.name||'').trim()) return;
+      var ex=lib.find(function(l){return l.name===it.name;});
+      if(ex){
+        /* update existing entry with latest data */
+        ex.price=it.price;ex.unit=it.unit||'';ex.desc=it.desc||'';
+        ex.photos=it.photos||[];ex.updatedAt=Date.now();
+        updated++;
+      } else {
+        lib.push({
+          libId:Date.now()+Math.random(),
+          name:it.name,price:it.price,unit:it.unit||'',
+          desc:it.desc||'',photos:it.photos||[],
+          addedAt:Date.now(),updatedAt:Date.now()
+        });
+        added++;
+      }
+    });
+    scLibSave(lib);
+    scRenderLibrary();
+    toast('\u2713 Library restored: '+added+' added, '+updated+' updated from Drive');
+  }).catch(function(e){
+    console.error(e);
+    toast('Restore failed \u2014 check Drive connection');
   });
 }
 
