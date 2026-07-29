@@ -6417,25 +6417,23 @@ function scRenderLibrary(){
 function scLibReAddByName(name){
   var lib=scLibLoad();
   var l=lib.find(function(item){return item.name===name;});
-  if(!l) return;
-  if(SC.items.find(function(i){return i.name===l.name;})){
-    toast(l.name+' is already on the page');return;
+  if(!l){toast('Product not found in library');return;}
+  if(SC.items.find(function(i){return i.name===name;})){
+    toast(name+' is already on the page');return;
   }
-  /* add immediately with no photos — instant response */
   var newId=SC.nid++;
-  SC.items.push({id:newId,name:l.name,price:l.price,unit:l.unit||'',desc:l.desc||'',photos:[]});
-  scSaveDraft();scRenderList();scRenderLibrary();
-  toast('\u2713 '+l.name+' added — upload photos to update');
+  SC.items.push({id:newId,name:l.name,price:l.price||'',unit:l.unit||'',desc:l.desc||'',photos:[]});
+  try{scSaveDraft();}catch(e){console.error('saveDraft error:',e);}
+  scRenderList();scRenderLibrary();
+  toast('\u2713 '+l.name+' added');
 }
 
 /* remove a product from the current page (keeps it in library) */
 function scLibRemoveByName(name){
-  var lib=scLibLoad();
-  var l=lib.find(function(item){return item.name===name;});
-  if(!l) return;
-  SC.items=SC.items.filter(function(i){return i.name!==l.name;});
-  scSaveDraft();scRenderList();scRenderLibrary();
-  toast(l.name+' removed from page — still saved in library');
+  SC.items=SC.items.filter(function(i){return i.name!==name;});
+  try{scSaveDraft();}catch(e){console.error('saveDraft error:',e);}
+  scRenderList();scRenderLibrary();
+  toast(name+' removed from page \u2014 still in library');
 }
 
 function scCheckStorage(){
