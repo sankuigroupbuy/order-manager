@@ -3803,19 +3803,25 @@ function exportSummaryExcel(){
   ws1_meta.push('blank');ws1_meta.push('grand');
   var ws1=XLSX.utils.aoa_to_sheet(ws1_data);
   ws1['!cols']=[{wch:20},{wch:30},{wch:14},{wch:7},{wch:14},{wch:15},{wch:12},{wch:10}];
-  var BLU={patternType:'solid',fgColor:{rgb:'BDD7EE'}};
-  var NAVY={patternType:'solid',fgColor:{rgb:'1E3A5F'}};
-  var COLL={patternType:'solid',fgColor:{rgb:'C6EFCE'}};
-  var NCOLL={patternType:'solid',fgColor:{rgb:'FFC7CE'}};
+  var BLU={patternType:'solid',fgColor:{rgb:'FFBDD7EE'}};
+  var NAVY={patternType:'solid',fgColor:{rgb:'FF1E3A5F'}};
+  var COLL={patternType:'solid',fgColor:{rgb:'FFC6EFCE'}};
+  var NCOLL={patternType:'solid',fgColor:{rgb:'FFFFC7CE'}};
+  var NUM_COLS={'C':true,'D':true,'E':true};
   ['A','B','C','D','E','F','G','H'].forEach(function(col){
+    var isNum=NUM_COLS[col];
     ws1_meta.forEach(function(type,ri){
       var addr=col+(ri+1);
       if(!ws1[addr])ws1[addr]={t:'s',v:''};
       if(type==='header'){ws1[addr].s={font:{bold:true},fill:BLU,alignment:{horizontal:'center'}};}
-      else if(type==='total'){ws1[addr].s={fill:BLU};if(col==='A'||col==='E')ws1[addr].s.font={bold:true};}
-      else if(type==='grand'){ws1[addr].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:NAVY};}
-      else if(type==='coll'){ws1[addr].s=col==='F'?{font:{bold:true,color:{rgb:'276221'}},fill:COLL,alignment:{horizontal:'center'}}:{fill:COLL};}
-      else if(type==='item'&&col==='F'){ws1[addr].s={font:{bold:true,color:{rgb:'9C0006'}},fill:NCOLL,alignment:{horizontal:'center'}};}
+      else if(type==='total'){ws1[addr].s={fill:BLU,numFmt:isNum?'0.00':undefined};if(col==='A'||col==='E')ws1[addr].s.font={bold:true};}
+      else if(type==='grand'){ws1[addr].s={font:{bold:true,color:{rgb:'FFFFFFFF'}},fill:NAVY,numFmt:isNum?'0.00':undefined};}
+      else if(type==='coll'){ws1[addr].s=col==='F'?{font:{bold:true,color:{rgb:'FF276221'}},fill:COLL,alignment:{horizontal:'center'}}:{fill:COLL,numFmt:isNum?'0.00':undefined};}
+      else if(type==='item'){
+        var base=isNum?{numFmt:'0.00'}:{};
+        if(col==='F')ws1[addr].s=Object.assign(base,{font:{bold:true,color:{rgb:'FF9C0006'}},fill:NCOLL,alignment:{horizontal:'center'}});
+        else ws1[addr].s=Object.assign(base,{});
+      }
     });
   });
   var ws2_data=[['Product','Category','Total Qty','Total Revenue (A$)']],ws2_meta=['header'];
@@ -3826,17 +3832,20 @@ function exportSummaryExcel(){
   ws2_data.push(['TOTAL','',parseFloat(tQ.toFixed(2)),parseFloat(tR.toFixed(2))]);ws2_meta.push('grand');
   var ws2=XLSX.utils.aoa_to_sheet(ws2_data);
   ws2['!cols']=[{wch:32},{wch:16},{wch:12},{wch:18}];
+  var NUM2_COLS={'C':true,'D':true};
   ['A','B','C','D'].forEach(function(col){
+    var isNum2=NUM2_COLS[col];
     ws2_meta.forEach(function(type,ri){
       var addr=col+(ri+1);if(!ws2[addr])ws2[addr]={t:'s',v:''};
       if(type==='header')ws2[addr].s={font:{bold:true},fill:BLU,alignment:{horizontal:'center'}};
-      else if(type==='grand')ws2[addr].s={font:{bold:true,color:{rgb:'FFFFFF'}},fill:NAVY};
+      else if(type==='grand')ws2[addr].s={font:{bold:true,color:{rgb:'FFFFFFFF'}},fill:NAVY,numFmt:isNum2?'0.00':undefined};
+      else if(type==='item'&&isNum2)ws2[addr].s={numFmt:'0.00'};
     });
   });
   var wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws1,'Order Summary');
   XLSX.utils.book_append_sheet(wb,ws2,'Products by Qty');
-  XLSX.writeFile(wb,'order-summary-'+new Date().toISOString().split('T')[0]+'.xlsx');
+  XLSX.writeFile(wb,'order-summary-'+new Date().toISOString().split('T')[0]+'.xlsx',{cellStyles:true,bookType:'xlsx'});
   toast('Summary exported \u2713');
 }
 
