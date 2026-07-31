@@ -2342,6 +2342,8 @@ function renderImportPreview(){
       var stockMatch=fuzzyMatchStock(it.label);
       var knownCost=stockMatch?stockMatch.cost:null;
       var knownSell=stockMatch?stockMatch.sell:null;
+      /* DEBUG: log match to console */
+      console.log('[IMPORT DEBUG] label=',it.label,' → matched=',stockMatch?stockMatch.name:'(none)',' sell=',knownSell);
       /* use current stock sell price — if WhatsApp price differs, warn the user */
       var displaySell=knownSell!==null?knownSell:it.price;
       var priceDiffers=knownSell!==null&&Math.abs(knownSell-it.price)>0.001;
@@ -2359,6 +2361,7 @@ function renderImportPreview(){
         '<td style="padding:6px 8px;border-bottom:1px solid #e0e7ff">'+
           '<input id="imp-lbl-'+i+'-'+j+'" value="'+esc(it.label)+'" style="font-size:12px;padding:4px 7px;border:1px solid #e0e0e0;border-radius:5px;width:100%">'+
           newTag+
+          (stockMatch?'<div style="font-size:10px;color:#6366f1;margin-top:2px">🔗 Matched stock: '+esc(stockMatch.name)+'</div>':'')+
         '</td>'+
         '<td style="padding:6px 8px;border-bottom:1px solid #e0e7ff;width:75px">'+
           '<input id="imp-qty-'+i+'-'+j+'" type="number" min="0.01" step="0.01" value="'+it.qty.toFixed(2)+'" style="font-size:12px;padding:4px 7px;border:1px solid #e0e0e0;border-radius:5px;width:100%;text-align:center" onchange="recalcRow('+i+','+j+')">'+
