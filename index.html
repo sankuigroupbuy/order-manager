@@ -2582,7 +2582,7 @@ function fuzzyMatchStock(label){
   }
   var nn=normFM(label).replace(/\s+/g,'');
   var tokens=normFM(label).split(/\s+/).filter(function(t){return t.length>=2});
-  return D.stock.find(function(s){
+  return D.stock.filter(function(s){return !s.archived;}).find(function(s){
     var sn=normFM(s.name).replace(/\s+/g,'');
     if(sn===nn) return true;
     if(safeInc(nn,sn)||safeInc(sn,nn)) return true;
