@@ -3761,92 +3761,124 @@ function renderSummary(){
 }
 
 function exportSummaryExcel(){
-  if(typeof XLSX==='undefined'){toast('Loading Excel library...');return}
-  var ords=getSummaryOrders();
-  if(!ords.length){toast('No orders to export.');return}
-  var mergedMap={};
-  ords.forEach(function(o){
-    var key=o.cid+'|'+o.date;
-    if(!mergedMap[key]) mergedMap[key]={cid:o.cid,date:o.date,items:[]};
-    o.items.forEach(function(it){
-      var ex=mergedMap[key].items.find(function(x){return x.s===it.s&&(x.sp||0)===(it.sp||0);});
-      if(ex){ex.q=parseFloat((ex.q+it.q).toFixed(2));if(it.collected)ex.collected=true;}
-      else{mergedMap[key].items.push({s:it.s,q:it.q,sp:it.sp,cp:it.cp,collected:!!it.collected,itemStatus:o.status});}
+  /* Uses ExcelJS for reliable colours + number formatting (SheetJS community lacks style write support) */
+  function doExport(){
+    var ords=getSummaryOrders();
+    if(!ords.length){toast('No orders to export.');return;}
+    var mergedMap={};
+    ords.forEach(function(o){
+      var key=o.cid+'|'+o.date;
+      if(!mergedMap[key]) mergedMap[key]={cid:o.cid,date:o.date,items:[]};
+      o.items.forEach(function(it){
+        var ex=mergedMap[key].items.find(function(x){return x.s===it.s&&(x.sp||0)===(it.sp||0);});
+        if(ex){ex.q=parseFloat((ex.q+it.q).toFixed(2));if(it.collected)ex.collected=true;}
+        else{mergedMap[key].items.push({s:it.s,q:it.q,sp:it.sp,cp:it.cp,collected:!!it.collected,itemStatus:o.status});}
+      });
     });
-  });
-  var merged=Object.values(mergedMap).sort(function(a,b){
-    var na=(cp(a.cid)||{name:''}).name,nb=(cp(b.cid)||{name:''}).name;
-    return na.localeCompare(nb)||a.date.localeCompare(b.date);
-  });
-  var HDR=['Order by','Product','Unit price (A$)','Qty','Subtotal (A$)','Collect Y/N','Order date','Status'];
-  var ws1_data=[],ws1_meta=[],grandTotal=0,prodMap={};
-  merged.forEach(function(m,bi){
-    var c=cp(m.cid),cname=c?c.name:'Unknown',blockTotal=0;
-    ws1_data.push(HDR.slice());ws1_meta.push('header');
-    m.items.forEach(function(it){
-      var p=sp(it.s);if(!p)return;
-      var sell=it.sp!=null?it.sp:p.sell;
-      var sub=parseFloat((sell*it.q).toFixed(2));blockTotal+=sub;
-      ws1_data.push([cname,p.name,parseFloat(sell.toFixed(2)),parseFloat(it.q.toFixed(2)),sub,
-        it.collected?'Collected':'Not collected',m.date,it.itemStatus||'unpaid']);
-      ws1_meta.push(it.collected?'coll':'item');
-      if(!prodMap[it.s])prodMap[it.s]={name:p.name,qty:0,revenue:0,cat:p.cat||'Others'};
-      prodMap[it.s].qty=parseFloat((prodMap[it.s].qty+it.q).toFixed(2));
-      prodMap[it.s].revenue=parseFloat((prodMap[it.s].revenue+sub).toFixed(2));
+    var merged=Object.values(mergedMap).sort(function(a,b){
+      var na=(cp(a.cid)||{name:''}).name,nb=(cp(b.cid)||{name:''}).name;
+      return na.localeCompare(nb)||a.date.localeCompare(b.date);
     });
-    grandTotal+=blockTotal;
-    ws1_data.push([cname+' Total','','','',parseFloat(blockTotal.toFixed(2)),'','','']);ws1_meta.push('total');
-    if(bi<merged.length-1){ws1_data.push(new Array(8).fill(''));ws1_meta.push('blank');}
-  });
-  ws1_data.push(new Array(8).fill(''));
-  ws1_data.push(['GRAND TOTAL','','','',parseFloat(grandTotal.toFixed(2)),'','','']);
-  ws1_meta.push('blank');ws1_meta.push('grand');
-  var ws1=XLSX.utils.aoa_to_sheet(ws1_data);
-  ws1['!cols']=[{wch:20},{wch:30},{wch:14},{wch:7},{wch:14},{wch:15},{wch:12},{wch:10}];
-  var BLU={patternType:'solid',fgColor:{rgb:'FFBDD7EE'}};
-  var NAVY={patternType:'solid',fgColor:{rgb:'FF1E3A5F'}};
-  var COLL={patternType:'solid',fgColor:{rgb:'FFC6EFCE'}};
-  var NCOLL={patternType:'solid',fgColor:{rgb:'FFFFC7CE'}};
-  var NUM_COLS={'C':true,'D':true,'E':true};
-  ['A','B','C','D','E','F','G','H'].forEach(function(col){
-    var isNum=NUM_COLS[col];
-    ws1_meta.forEach(function(type,ri){
-      var addr=col+(ri+1);
-      if(!ws1[addr])ws1[addr]={t:'s',v:''};
-      if(type==='header'){ws1[addr].s={font:{bold:true},fill:BLU,alignment:{horizontal:'center'}};}
-      else if(type==='total'){ws1[addr].s={fill:BLU,numFmt:isNum?'0.00':undefined};if(col==='A'||col==='E')ws1[addr].s.font={bold:true};}
-      else if(type==='grand'){ws1[addr].s={font:{bold:true,color:{rgb:'FFFFFFFF'}},fill:NAVY,numFmt:isNum?'0.00':undefined};}
-      else if(type==='coll'){ws1[addr].s=col==='F'?{font:{bold:true,color:{rgb:'FF276221'}},fill:COLL,alignment:{horizontal:'center'}}:{fill:COLL,numFmt:isNum?'0.00':undefined};}
-      else if(type==='item'){
-        var base=isNum?{numFmt:'0.00'}:{};
-        if(col==='F')ws1[addr].s=Object.assign(base,{font:{bold:true,color:{rgb:'FF9C0006'}},fill:NCOLL,alignment:{horizontal:'center'}});
-        else ws1[addr].s=Object.assign(base,{});
-      }
+
+    var ws1_rows=[],ws1_meta=[],grandTotal=0,prodMap={};
+    merged.forEach(function(m,bi){
+      var c=cp(m.cid),cname=c?c.name:'Unknown',blockTotal=0;
+      ws1_rows.push(['Order by','Product','Unit price (A$)','Qty','Subtotal (A$)','Collect Y/N','Order date','Status']);
+      ws1_meta.push('header');
+      m.items.forEach(function(it){
+        var p=sp(it.s);if(!p)return;
+        var sell=it.sp!=null?it.sp:p.sell;
+        var sub=parseFloat((sell*it.q).toFixed(2));blockTotal+=sub;
+        ws1_rows.push([cname,p.name,parseFloat(sell.toFixed(2)),parseFloat(it.q.toFixed(2)),sub,
+          it.collected?'Collected':'Not collected',m.date,it.itemStatus||'unpaid']);
+        ws1_meta.push(it.collected?'coll':'item');
+        if(!prodMap[it.s])prodMap[it.s]={name:p.name,qty:0,revenue:0,cat:p.cat||'Others'};
+        prodMap[it.s].qty=parseFloat((prodMap[it.s].qty+it.q).toFixed(2));
+        prodMap[it.s].revenue=parseFloat((prodMap[it.s].revenue+sub).toFixed(2));
+      });
+      grandTotal+=blockTotal;
+      ws1_rows.push([cname+' Total','','','',parseFloat(blockTotal.toFixed(2)),'','','']);ws1_meta.push('total');
+      if(bi<merged.length-1){ws1_rows.push(new Array(8).fill(''));ws1_meta.push('blank');}
     });
-  });
-  var ws2_data=[['Product','Category','Total Qty','Total Revenue (A$)']],ws2_meta=['header'];
-  Object.values(prodMap).sort(function(a,b){return b.qty-a.qty;}).forEach(function(p){
-    ws2_data.push([p.name,p.cat,p.qty,p.revenue]);ws2_meta.push('item');
-  });
-  var tQ=0,tR=0;ws2_data.slice(1).forEach(function(r){tQ+=r[2];tR+=r[3];});
-  ws2_data.push(['TOTAL','',parseFloat(tQ.toFixed(2)),parseFloat(tR.toFixed(2))]);ws2_meta.push('grand');
-  var ws2=XLSX.utils.aoa_to_sheet(ws2_data);
-  ws2['!cols']=[{wch:32},{wch:16},{wch:12},{wch:18}];
-  var NUM2_COLS={'C':true,'D':true};
-  ['A','B','C','D'].forEach(function(col){
-    var isNum2=NUM2_COLS[col];
-    ws2_meta.forEach(function(type,ri){
-      var addr=col+(ri+1);if(!ws2[addr])ws2[addr]={t:'s',v:''};
-      if(type==='header')ws2[addr].s={font:{bold:true},fill:BLU,alignment:{horizontal:'center'}};
-      else if(type==='grand')ws2[addr].s={font:{bold:true,color:{rgb:'FFFFFFFF'}},fill:NAVY,numFmt:isNum2?'0.00':undefined};
-      else if(type==='item'&&isNum2)ws2[addr].s={numFmt:'0.00'};
+    ws1_rows.push(new Array(8).fill(''));ws1_meta.push('blank');
+    ws1_rows.push(['GRAND TOTAL','','','',parseFloat(grandTotal.toFixed(2)),'','','']);ws1_meta.push('grand');
+
+    var wb=new ExcelJS.Workbook();
+    var ws1=wb.addWorksheet('Order Summary');
+    ws1.columns=[
+      {width:20},{width:30},{width:14},{width:7},{width:14},{width:15},{width:12},{width:10}
+    ];
+
+    var BLU={type:'pattern',pattern:'solid',fgColor:{argb:'FFBDD7EE'}};
+    var NAVY={type:'pattern',pattern:'solid',fgColor:{argb:'FF1E3A5F'}};
+    var COLL={type:'pattern',pattern:'solid',fgColor:{argb:'FFC6EFCE'}};
+    var NCOLL={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFC7CE'}};
+    var NUM_FMT='0.00';
+    var NUM_COLS={3:true,4:true,5:true}; /* C=unit price, D=qty, E=subtotal */
+
+    ws1_rows.forEach(function(rowData,ri){
+      var row=ws1.addRow(rowData);
+      var type=ws1_meta[ri];
+      row.eachCell({includeEmpty:true},function(cell,col){
+        var isNum=!!NUM_COLS[col];
+        if(isNum&&cell.value!==''&&cell.value!==null) cell.numFmt=NUM_FMT;
+        if(type==='header'){
+          cell.fill=BLU;cell.font={bold:true};cell.alignment={horizontal:'center',vertical:'middle'};
+        } else if(type==='total'){
+          cell.fill=BLU;
+          if(col===1||col===5) cell.font={bold:true};
+        } else if(type==='grand'){
+          cell.fill=NAVY;cell.font={bold:true,color:{argb:'FFFFFFFF'}};
+        } else if(type==='coll'){
+          cell.fill=COLL;
+          if(col===6){cell.font={bold:true,color:{argb:'FF276221'}};cell.alignment={horizontal:'center'};}
+        } else if(type==='item'){
+          if(col===6){cell.fill=NCOLL;cell.font={bold:true,color:{argb:'FF9C0006'}};cell.alignment={horizontal:'center'};}
+        }
+      });
     });
-  });
-  var wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws1,'Order Summary');
-  XLSX.utils.book_append_sheet(wb,ws2,'Products by Qty');
-  XLSX.writeFile(wb,'order-summary-'+new Date().toISOString().split('T')[0]+'.xlsx',{cellStyles:true,bookType:'xlsx'});
-  toast('Summary exported \u2713');
+
+    /* Sheet 2: Products by Qty */
+    var ws2_rows=[['Product','Category','Total Qty','Total Revenue (A$)']],ws2_meta=['header'];
+    Object.values(prodMap).sort(function(a,b){return b.qty-a.qty;}).forEach(function(p){
+      ws2_rows.push([p.name,p.cat,p.qty,p.revenue]);ws2_meta.push('item');
+    });
+    var tQ=0,tR=0;ws2_rows.slice(1).forEach(function(r){tQ+=r[2];tR+=r[3];});
+    ws2_rows.push(['TOTAL','',parseFloat(tQ.toFixed(2)),parseFloat(tR.toFixed(2))]);ws2_meta.push('grand');
+    var ws2=wb.addWorksheet('Products by Qty');
+    ws2.columns=[{width:32},{width:16},{width:12},{width:18}];
+    var NUM2_COLS={3:true,4:true};
+    ws2_rows.forEach(function(rowData,ri){
+      var row=ws2.addRow(rowData);
+      var type=ws2_meta[ri];
+      row.eachCell({includeEmpty:true},function(cell,col){
+        if(NUM2_COLS[col]&&cell.value!==''&&cell.value!==null) cell.numFmt=NUM_FMT;
+        if(type==='header'){cell.fill=BLU;cell.font={bold:true};cell.alignment={horizontal:'center'};}
+        else if(type==='grand'){cell.fill=NAVY;cell.font={bold:true,color:{argb:'FFFFFFFF'}};}
+      });
+    });
+
+    var today=new Date().toISOString().split('T')[0];
+    wb.xlsx.writeBuffer().then(function(buf){
+      var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement('a');a.href=url;a.download='order-summary-'+today+'.xlsx';
+      document.body.appendChild(a);a.click();document.body.removeChild(a);
+      setTimeout(function(){URL.revokeObjectURL(url);},500);
+      toast('Summary exported ✓');
+    });
+  }
+
+  if(typeof ExcelJS==='undefined'){
+    toast('Loading Excel library…');
+    var s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    s.onload=doExport;
+    s.onerror=function(){toast('Could not load Excel library — check internet connection.');};
+    document.head.appendChild(s);
+  } else {
+    doExport();
+  }
 }
 
 function sumTogglePaid(cid,date){
