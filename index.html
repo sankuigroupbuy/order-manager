@@ -2342,8 +2342,7 @@ function renderImportPreview(){
       var stockMatch=fuzzyMatchStock(it.label);
       var knownCost=stockMatch?stockMatch.cost:null;
       var knownSell=stockMatch?stockMatch.sell:null;
-      /* DEBUG: log match to console */
-      console.log('[IMPORT DEBUG] label=',it.label,' → matched=',stockMatch?stockMatch.name:'(none)',' sell=',knownSell);
+
       /* use current stock sell price — if WhatsApp price differs, warn the user */
       var displaySell=knownSell!==null?knownSell:it.price;
       var priceDiffers=knownSell!==null&&Math.abs(knownSell-it.price)>0.001;
@@ -2361,7 +2360,7 @@ function renderImportPreview(){
         '<td style="padding:6px 8px;border-bottom:1px solid #e0e7ff">'+
           '<input id="imp-lbl-'+i+'-'+j+'" value="'+esc(it.label)+'" style="font-size:12px;padding:4px 7px;border:1px solid #e0e0e0;border-radius:5px;width:100%">'+
           newTag+
-          (stockMatch?'<div style="font-size:10px;color:#6366f1;margin-top:2px">🔗 Matched stock: '+esc(stockMatch.name)+'</div>':'')+
+
         '</td>'+
         '<td style="padding:6px 8px;border-bottom:1px solid #e0e7ff;width:75px">'+
           '<input id="imp-qty-'+i+'-'+j+'" type="number" min="0.01" step="0.01" value="'+it.qty.toFixed(2)+'" style="font-size:12px;padding:4px 7px;border:1px solid #e0e0e0;border-radius:5px;width:100%;text-align:center" onchange="recalcRow('+i+','+j+')">'+
@@ -2570,7 +2569,9 @@ function fuzzyMatchStock(label){
   /* normalise both label and stock name the same way:
      - strip bracket content, prices, space-preceded weights (so " 500g" goes but "400g" in 榴槤肉400g stays)
      - strip trailing /盒 /包 etc unit suffixes
-     - only allow substring match when shorter string is >= 50% of longer (prevents 牛肉 matching 和牛萬能牛肉) */
+     - only allow substring match when shorter string is >= 50% of longer (prevents 牛肉 matching 和牛萬能牛肉)
+     TWO-PASS: exact/substring matches always beat token matches regardless of D.stock order.
+     WORD-BOUNDARY: token prefix match requires next char is non-alphanumeric (prevents "black"→"blackberry"). */
   function normFM(s){
     return s.replace(/[\u2060\u200B\u200C\u200D\uFEFF\u00A0]/g,'').toLowerCase()
       .replace(/[（(][^）)]*[）)]/g,'')
@@ -2583,16 +2584,34 @@ function fuzzyMatchStock(label){
     if(!longer.includes(shorter)) return false;
     return shorter.length/longer.length>=0.5;
   }
+  function wordBoundary(str,pos){
+    /* true if position pos in str is a word boundary (end of string or non-alphanumeric) */
+    if(pos>=str.length) return true;
+    return !/[a-z0-9\u4e00-\u9fff]/.test(str[pos]);
+  }
   var nn=normFM(label).replace(/\s+/g,'');
   var tokens=normFM(label).split(/\s+/).filter(function(t){return t.length>=2});
-  return D.stock.filter(function(s){return !s.archived;}).find(function(s){
+  var active=D.stock.filter(function(s){return !s.archived;});
+
+  /* Pass 1: exact match or safe substring match — wins regardless of array order */
+  var p1=active.find(function(s){
     var sn=normFM(s.name).replace(/\s+/g,'');
     if(sn===nn) return true;
     if(safeInc(nn,sn)||safeInc(sn,nn)) return true;
+    return false;
+  });
+  if(p1) return p1;
+
+  /* Pass 2: token match — only reached when no exact/substring match exists.
+     Requires word boundary so "black" token never matches "blackberry". */
+  return active.find(function(s){
+    var sn=normFM(s.name).replace(/\s+/g,'');
     return tokens.some(function(t){
-      return t.length>=3&&(sn===t||
-        (sn.startsWith(t)&&t.length/sn.length>=0.5)||
-        (t.startsWith(sn)&&sn.length/t.length>=0.5));
+      if(t.length<3) return false;
+      if(sn===t) return true;
+      if(sn.startsWith(t)&&t.length/sn.length>=0.5&&wordBoundary(sn,t.length)) return true;
+      if(t.startsWith(sn)&&sn.length/t.length>=0.5&&wordBoundary(t,sn.length)) return true;
+      return false;
     });
   })||null;
 }
