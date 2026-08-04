@@ -5065,16 +5065,18 @@ function gdLoad(){
       D.nid=payload.nid||1;
       /* restore showcase + order form drafts if present in backup */
       if(payload.showcaseDraft){
-        /* restore full showcase including photos into memory */
         SC.items=payload.showcaseDraft.items||[];
         SC.nid=payload.showcaseDraft.nid||(SC.items.length?Math.max.apply(null,SC.items.map(function(i){return i.id;}))+1:1);
-        /* save text-only version to localStorage */
-        var draftNoPhotos={
-          title:payload.showcaseDraft.title||'',
-          intro:payload.showcaseDraft.intro||'',
-          items:SC.items.map(function(it){return {id:it.id,name:it.name,price:it.price,unit:it.unit,desc:it.desc,photos:[]};})
-        };
-        ofSave(SC.CFG_KEY, draftNoPhotos);
+        /* preserve photos from existing localStorage — backups don't carry photo blobs */
+        var existingScDraft=null;
+        try{existingScDraft=JSON.parse(localStorage.getItem(SC.CFG_KEY));}catch(e){}
+        if(existingScDraft&&existingScDraft.items){
+          SC.items=SC.items.map(function(it){
+            var ex=existingScDraft.items.find(function(e){return e.id===it.id;});
+            return (ex&&ex.photos&&ex.photos.length)?Object.assign({},it,{photos:ex.photos}):it;
+          });
+        }
+        ofSave(SC.CFG_KEY,{title:payload.showcaseDraft.title||'',intro:payload.showcaseDraft.intro||'',items:SC.items,nid:SC.nid});
       }
       if(payload.orderFormDraft) ofSave(OF.CFG_KEY, payload.orderFormDraft);
       if(payload.showcaseLibrary&&payload.showcaseLibrary.length) ofSave(SC_LIB_KEY, payload.showcaseLibrary);
@@ -6019,18 +6021,26 @@ function scLoadConfig(){
 }
 
 function scSaveDraft(){
-  /* strip photos before saving to localStorage — they stay in SC.items memory
-     and are persisted via Drive backup (gdSave) and published JSON (scPublish) */
-  var itemsNoPhotos=SC.items.map(function(it){
-    return {id:it.id,name:it.name,price:it.price,unit:it.unit,desc:it.desc,photos:[]};
-  });
+  /* Save WITH photos — already compressed to ~40KB each so quota is fine.
+     Fall back to no-photos save only if storage is genuinely full. */
   var cfg={
     title:document.getElementById('sc-title').value.trim(),
     intro:document.getElementById('sc-intro').value.trim(),
-    items:itemsNoPhotos,
+    items:SC.items,
     nid:SC.nid
   };
-  try{ofSave(SC.CFG_KEY,cfg);}catch(e){console.warn('scSaveDraft storage error:',e);}
+  try{
+    ofSave(SC.CFG_KEY,cfg);
+  }catch(e){
+    /* storage full — retry without photos so at least names/prices are saved */
+    console.warn('scSaveDraft: storage full, saving without photos');
+    var noPhotos=Object.assign({},cfg,{
+      items:SC.items.map(function(it){
+        return {id:it.id,name:it.name,price:it.price,unit:it.unit,desc:it.desc,photos:[]};
+      })
+    });
+    try{ofSave(SC.CFG_KEY,noPhotos);}catch(e2){toast('⚠️ Storage full — please delete unused photos or save to Drive');}
+  }
   scUpdateBadge();
   scLibMerge(SC.items); /* library gets full photos for Drive publish */
   return cfg;
