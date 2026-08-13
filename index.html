@@ -457,11 +457,12 @@ textarea{resize:vertical;min-height:60px}
   .btn-dcollect{padding:10px 18px;font-size:14px;font-weight:700;border:1.5px solid #d1d5db;border-radius:12px;background:#fff;color:#666;cursor:pointer;min-height:46px;white-space:nowrap;transition:all .15s;font-family:inherit;flex-shrink:0;-webkit-tap-highlight-color:transparent}
   .btn-dcollect.done{background:#16a34a;color:#fff;border-color:#16a34a}
 
-  /* pay button — full width */
-  .dcard-footer{padding:6px 12px 14px}
-  .btn-dpay{width:100%;padding:15px;font-size:16px;font-weight:800;border:1.5px solid #d1d5db;border-radius:13px;background:#fff;color:#374151;cursor:pointer;min-height:52px;font-family:inherit;transition:all .2s;letter-spacing:.01em;-webkit-tap-highlight-color:transparent}
+  /* pay button + WA button */
+  .dcard-footer{padding:6px 12px 14px;display:flex;gap:8px}
+  .btn-dpay{flex:1;padding:15px;font-size:16px;font-weight:800;border:1.5px solid #d1d5db;border-radius:13px;background:#fff;color:#374151;cursor:pointer;min-height:52px;font-family:inherit;transition:all .2s;letter-spacing:.01em;-webkit-tap-highlight-color:transparent}
   .btn-dpay.paid{background:#16a34a;color:#fff;border-color:#16a34a}
   .btn-dpay.partial{background:#fef3c7;color:#b45309;border-color:#fcd34d}
+  .btn-dwa{padding:0 16px;font-size:20px;font-weight:600;border:1.5px solid #1a3a2a;border-radius:13px;background:#fff;color:#1a3a2a;cursor:pointer;min-height:52px;font-family:inherit;-webkit-tap-highlight-color:transparent;white-space:nowrap}
 
   /* collection progress bar */
   .dcard-prog{padding:4px 13px 10px;display:flex;align-items:center;gap:8px}
@@ -3590,12 +3591,13 @@ function renderSummary(){
     var tickBtn=isPaid
       ?'<button onclick="sumTogglePaid('+m.cid+',\''+m.date+'\')" style="padding:5px 12px;font-size:12px;font-weight:700;border:none;border-radius:6px;background:#16a34a;color:#fff;cursor:pointer">✓ Paid</button>'
       :'<button onclick="sumTogglePaid('+m.cid+',\''+m.date+'\')" style="padding:5px 12px;font-size:12px;font-weight:600;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#555;cursor:pointer">Mark paid</button>';
+    var waBtn='<button onclick="sumShareImage('+m.cid+',\''+m.date+'\')" style="padding:5px 12px;font-size:12px;font-weight:700;border:none;border-radius:6px;background:#1a3a2a;color:#fff;cursor:pointer;white-space:nowrap">📤 Share</button>';
     html+=
-      '<tr class="subtotal-row" style="'+rowBg+'">'+ 
+      '<tr class="subtotal-row" style="'+rowBg+'">'+
         '<td colspan="4" style="text-align:right;padding-right:14px;font-weight:700;color:#1a1a1a">'+esc(cname)+' total</td>'+
         '<td class="num" style="font-weight:700">'+blockTotal.toFixed(2)+'</td>'+
         '<td style="text-align:center;padding:6px 8px">'+tickBtn+'</td>'+
-        '<td></td>'+
+        '<td style="text-align:center;padding:4px 6px;white-space:nowrap">'+waBtn+'</td>'+
       '</tr>';
   });
 
@@ -3687,6 +3689,7 @@ function renderSummary(){
           progBar+
           '<div class="dcard-footer">'+
             '<button class="'+payCls+'" id="dpaybtn-'+m.cid+'" data-cid="'+m.cid+'" data-date="'+m.date+'">'+payTxt+'</button>'+
+            '<button class="btn-dwa" onclick="sumShareImage('+m.cid+',\''+m.date+'\')">📤</button>'+
           '</div>'+
         '</div>';  /* close .dcard */
     });
@@ -3879,6 +3882,188 @@ function exportSummaryExcel(){
   } else {
     doExport();
   }
+}
+
+function sumShareImage(cid,date){
+  var c=cp(cid);
+  var cname=c?c.name:'Customer';
+
+  /* build items split by paid/unpaid */
+  var ords=D.orders.filter(function(o){return o.cid===cid&&(!date||o.date===date);});
+  var itemMap={};
+  ords.forEach(function(o){
+    o.items.forEach(function(it){
+      var key=it.s+'|'+(it.sp!=null?it.sp:'')+'|'+o.status;
+      if(!itemMap[key]){
+        var p=sp(it.s);
+        var sell=it.sp!=null?it.sp:(p?p.sell:0);
+        itemMap[key]={name:p?p.name:String(it.s),sell:sell,q:0,unit:p?(p.unit||''):'',paid:o.status==='paid'};
+      }
+      itemMap[key].q=parseFloat((itemMap[key].q+it.q).toFixed(2));
+    });
+  });
+  var allLines=Object.values(itemMap);
+  if(!allLines.length){toast('沒有訂單項目');return;}
+  var unpaid=allLines.filter(function(l){return !l.paid;});
+  var paid=allLines.filter(function(l){return l.paid;});
+  var unpaidTotal=unpaid.reduce(function(s,l){return s+l.sell*l.q;},0);
+  var paidTotal=paid.reduce(function(s,l){return s+l.sell*l.q;},0);
+
+  /* ── Canvas layout constants ── */
+  var W=680, SC=2;
+  var BRAND_H=64,CUST_H=36,COL_H=34,ROW_H=40,SEC_H=26,SUBTOT_H=36,BAL_H=50,FOOT_H=34;
+  var totalH=BRAND_H+CUST_H+COL_H
+    +(unpaid.length?SEC_H+unpaid.length*ROW_H:0)
+    +(paid.length?SEC_H+paid.length*ROW_H+SUBTOT_H:0)
+    +BAL_H+FOOT_H;
+
+  var cv=document.createElement('canvas');
+  cv.width=W*SC; cv.height=totalH*SC;
+  var ctx=cv.getContext('2d');
+  ctx.scale(SC,SC);
+
+  /* helpers */
+  var SANS='"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif';
+  function fill(color,x,y,w,h){ctx.fillStyle=color;ctx.fillRect(x,y,w,h);}
+  function hline(y2,color){ctx.strokeStyle=color;ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(0,y2);ctx.lineTo(W,y2);ctx.stroke();}
+  function txt(t,x,y2,sz,weight,color,align,maxW){
+    ctx.font=(weight?weight+' ':'')+sz+'px '+SANS;
+    ctx.fillStyle=color;ctx.textAlign=align||'left';
+    maxW?ctx.fillText(t,x,y2,maxW):ctx.fillText(t,x,y2);
+  }
+  function rRect(x,y2,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y2);ctx.lineTo(x+w-r,y2);ctx.arcTo(x+w,y2,x+w,y2+r,r);
+    ctx.lineTo(x+w,y2+h-r);ctx.arcTo(x+w,y2+h,x+w-r,y2+h,r);
+    ctx.lineTo(x+r,y2+h);ctx.arcTo(x,y2+h,x,y2+h-r,r);
+    ctx.lineTo(x,y2+r);ctx.arcTo(x,y2,x+r,y2,r);
+    ctx.closePath();
+  }
+
+  /* column x-positions (right edge for right-align, centre for badge) */
+  /* Product:left@14  Qty:right@310  Price:right@410  Status:cx@510  Sub:right@666 */
+  var CX=[14,310,410,510,666];
+
+  var y=0;
+
+  /* ── Brand header ── */
+  fill('#1a3a2a',0,y,W,BRAND_H);
+  var logoEl=document.querySelector('.topbar-logo-icon img');
+  if(logoEl&&logoEl.complete){
+    try{
+      ctx.save();
+      rRect(14,y+12,40,40,8);ctx.clip();
+      ctx.drawImage(logoEl,14,y+12,40,40);
+      ctx.restore();
+    }catch(e){txt('🌿',14,y+40,26,'','#8fbf9e');}
+  } else {
+    fill('rgba(255,255,255,0.12)',14,y+12,40,40);
+    txt('🌿',18,y+40,22,'','#8fbf9e');
+  }
+  txt('山區團購優惠組',66,y+30,16,'600','#ffffff');
+  txt('HILLS SWEETS NMC  ·  GROUP BUY',66,y+48,10,'','#7aad8c');
+  y+=BRAND_H;
+
+  /* ── Customer row ── */
+  fill('#f0f7f2',0,y,W,CUST_H);
+  hline(y+CUST_H,'#cce3d4');
+  txt(cname+' 的訂單',14,y+23,13,'600','#1a3a2a');
+  txt(date||new Date().toLocaleDateString('zh-TW'),666,y+23,11,'','#6b9e7a','right');
+  y+=CUST_H;
+
+  /* ── Column headers ── */
+  fill('#2d5a43',0,y,W,COL_H);
+  var hdrs=['產品','數量','單價','狀態','小計'];
+  var halign=['left','right','right','center','right'];
+  hdrs.forEach(function(h,i){txt(h,CX[i],y+22,11,'500','#d4ead9',halign[i]);});
+  y+=COL_H;
+
+  /* ── Section label ── */
+  function sectionLabel(label,textCol,bg,border){
+    fill(bg,0,y,W,SEC_H);hline(y+SEC_H,border);
+    txt(label,14,y+17,10,'500',textCol);
+    y+=SEC_H;
+  }
+
+  /* ── Item row ── */
+  function itemRow(line,ri,isPaid){
+    var bg=isPaid?(ri%2?'#f5fef5':'#fafff9'):(ri%2?'#fafafa':'#ffffff');
+    fill(bg,0,y,W,ROW_H);hline(y+ROW_H,'#eeeeee');
+    var nameClr=isPaid?'#aaaaaa':'#1a1a1a';
+    var numClr=isPaid?'#bbbbbb':'#333333';
+    var mid=y+ROW_H/2+5;
+    /* product name */
+    txt(line.name,CX[0],mid,13,'',nameClr,'left',CX[1]-CX[0]-20);
+    /* qty */
+    var qStr=parseFloat(line.q).toFixed(line.q%1?2:0)+(line.unit?' '+line.unit.replace(/^\//,''):'');
+    txt(qStr,CX[1],mid,12,'',numClr,'right');
+    /* unit price */
+    txt('$'+line.sell.toFixed(2),CX[2],mid,12,'',numClr,'right');
+    /* badge */
+    var bTxt=isPaid?'已付':'未付';
+    var bBg=isPaid?'#dcfce7':'#fee2e2';
+    var bClr=isPaid?'#16a34a':'#dc2626';
+    var bw=44,bh=20,bx=CX[3]-bw/2,by=y+ROW_H/2-bh/2;
+    ctx.fillStyle=bBg; rRect(bx,by,bw,bh,99); ctx.fill();
+    txt(bTxt,CX[3],mid-1,10,'500',bClr,'center');
+    /* subtotal */
+    var subStr='$'+(line.sell*line.q).toFixed(2);
+    txt(subStr,CX[4],mid,12,'',isPaid?'#bbbbbb':'#1a1a1a','right');
+    if(isPaid){
+      ctx.font='12px '+SANS;ctx.textAlign='right';
+      var tw=ctx.measureText(subStr).width;
+      ctx.strokeStyle='#cccccc';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(CX[4]-tw,mid-5);ctx.lineTo(CX[4],mid-5);ctx.stroke();
+    }
+    y+=ROW_H;
+  }
+
+  /* ── Draw unpaid section ── */
+  if(unpaid.length){
+    sectionLabel('⬇  未付款','#d97706','#fff7ed','#fed7aa');
+    unpaid.forEach(function(l,i){itemRow(l,i,false);});
+  }
+
+  /* ── Draw paid section ── */
+  if(paid.length){
+    sectionLabel('✓  已付款（供參考）','#16a34a','#f0fdf4','#d1fae5');
+    paid.forEach(function(l,i){itemRow(l,i,true);});
+    /* paid subtotal */
+    fill('#f0fdf4',0,y,W,SUBTOT_H);hline(y+SUBTOT_H,'#d1fae5');
+    txt('已付小計',CX[4],y+SUBTOT_H/2+5,11,'500','#16a34a','right');
+    /* shift left of amount */
+    ctx.font='500 11px '+SANS;ctx.textAlign='right';
+    var paidAmtStr='$'+paidTotal.toFixed(2);
+    var paidAmtW=ctx.measureText(paidAmtStr).width;
+    txt('已付小計',CX[4]-paidAmtW-10,y+SUBTOT_H/2+5,11,'','#16a34a','right');
+    txt(paidAmtStr,CX[4],y+SUBTOT_H/2+5,12,'500','#16a34a','right');
+    y+=SUBTOT_H;
+  }
+
+  /* ── Balance due ── */
+  fill('#1a3a2a',0,y,W,BAL_H);
+  txt('今次應付  Balance Due',14,y+BAL_H/2+5,11,'','#8fbf9e');
+  txt('A$'+unpaidTotal.toFixed(2),CX[4],y+BAL_H/2+8,18,'700','#ffffff','right');
+  y+=BAL_H;
+
+  /* ── Footer ── */
+  fill('#f0f7f2',0,y,W,FOOT_H);
+  txt('如有問題請WhatsApp群組留言 · 多謝支持 🙏',W/2,y+FOOT_H/2+5,10,'','#6b9e7a','center');
+
+  /* ── Export ── */
+  cv.toBlob(function(blob){
+    var fname='order-'+cname+'-'+(date||'')+'.png';
+    if(navigator.share&&navigator.canShare){
+      var f=new File([blob],fname,{type:'image/png'});
+      if(navigator.canShare({files:[f]})){
+        navigator.share({files:[f],title:cname+' 訂單'}).catch(function(){});
+        return;
+      }
+    }
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');a.href=url;a.download=fname;a.click();
+    setTimeout(function(){URL.revokeObjectURL(url);},3000);
+  },'image/png');
 }
 
 function sumTogglePaid(cid,date){
