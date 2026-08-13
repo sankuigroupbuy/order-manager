@@ -3985,8 +3985,10 @@ function sumShareImage(cid,date){
     var mid=y+ROW_H/2+5;
     /* product name */
     txt(line.name,CX[0],mid,13,'',nameClr,'left',CX[1]-CX[0]-20);
-    /* qty */
-    var qStr=parseFloat(line.q).toFixed(line.q%1?2:0)+(line.unit?' '+line.unit.replace(/^\//,''):'');
+    /* qty — skip unit if it's just a number */
+    var unitStr=line.unit?line.unit.replace(/^\//,'').trim():'';
+    if(unitStr&&!isNaN(unitStr)) unitStr='';
+    var qStr=parseFloat(line.q).toFixed(line.q%1?2:0)+(unitStr?' '+unitStr:'');
     txt(qStr,CX[1],mid,12,'',numClr,'right');
     /* unit price */
     txt('$'+line.sell.toFixed(2),CX[2],mid,12,'',numClr,'right');
@@ -3995,7 +3997,7 @@ function sumShareImage(cid,date){
     var bBg=isPaid?'#dcfce7':'#fee2e2';
     var bClr=isPaid?'#16a34a':'#dc2626';
     var bw=44,bh=20,bx=CX[3]-bw/2,by=y+ROW_H/2-bh/2;
-    ctx.fillStyle=bBg; rRect(bx,by,bw,bh,99); ctx.fill();
+    ctx.fillStyle=bBg; rRect(bx,by,bw,bh,bh/2); ctx.fill();
     txt(bTxt,CX[3],mid-1,10,'500',bClr,'center');
     /* subtotal */
     var subStr='$'+(line.sell*line.q).toFixed(2);
