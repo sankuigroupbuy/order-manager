@@ -7262,6 +7262,22 @@ function renderBackorders(){
 /* boot */
 lkInit();
 
+/* ── iOS PWA: prevent rubber-band scroll bounce ── */
+(function(){
+  var lastY=0;
+  document.addEventListener('touchstart',function(e){
+    lastY=e.touches[0].clientY;
+  },{passive:true});
+  document.addEventListener('touchmove',function(e){
+    var y=e.touches[0].clientY;
+    var el=document.scrollingElement||document.documentElement;
+    var atTop=el.scrollTop<=0 && y>lastY;
+    var atBot=el.scrollTop+el.clientHeight>=el.scrollHeight && y<lastY;
+    if(atTop||atBot) e.preventDefault();
+    lastY=y;
+  },{passive:false});
+})();
+
 /* ── PWA Service Worker registration ── */
 if('serviceWorker' in navigator){
   window.addEventListener('load', function(){
