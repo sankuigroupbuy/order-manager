@@ -504,6 +504,31 @@ textarea{resize:vertical;min-height:60px}
   .dcard-hdr-sticky.visible{display:flex}
   .dcard-hdr-sticky .dcard-name{font-size:15px}
   .dcard-hdr-sticky .dcard-sub{font-size:11px}
+
+  /* ── MOBILE BOTTOM NAV ── */
+  body{padding-bottom:68px!important}
+  #mob-bottom-nav{display:flex!important}
+
+  /* ── QUICK-ADD BOTTOM SHEET ── */
+  #mob-qa-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;align-items:flex-end}
+  #mob-qa-overlay.open{display:flex}
+  #mob-qa-sheet{background:#fff;border-radius:22px 22px 0 0;width:100%;max-height:92vh;overflow-y:auto;padding:20px 18px 36px;box-sizing:border-box}
+  #mob-qa-sheet .qa-handle{width:40px;height:4px;border-radius:99px;background:#ddd;margin:0 auto 18px}
+  #mob-qa-sheet .qa-title{font-size:17px;font-weight:800;color:#1a1a1a;margin-bottom:18px;text-align:center}
+  #mob-qa-sheet label{font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+  #mob-qa-sheet select,#mob-qa-sheet input{width:100%;padding:12px 14px;border:1.5px solid #e5e7eb;border-radius:11px;font-size:15px;font-family:inherit;outline:none;box-sizing:border-box;background:#fafafa;margin-bottom:14px;-webkit-appearance:none;appearance:none;color:#1a1a1a}
+  #mob-qa-sheet select:focus,#mob-qa-sheet input:focus{border-color:#1a3a2a;background:#fff}
+  #mob-qa-sheet .qa-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  #mob-qa-sheet .qa-btn-row{display:flex;gap:10px;margin-top:6px}
+  #mob-qa-sheet .qa-submit{flex:1;padding:15px;font-size:16px;font-weight:800;border:none;border-radius:13px;background:#1a3a2a;color:#fff;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent}
+  #mob-qa-sheet .qa-cancel{padding:15px 20px;font-size:15px;font-weight:700;border:1.5px solid #e5e7eb;border-radius:13px;background:#fff;color:#666;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent}
+  #mob-qa-sheet .qa-msg{font-size:12px;text-align:center;min-height:18px;margin-top:10px}
+  #mob-qa-items{margin-bottom:6px}
+  .qa-item-row{display:grid;grid-template-columns:1fr 80px 32px;gap:8px;margin-bottom:8px;align-items:center}
+  .qa-item-row select,.qa-item-row input{margin-bottom:0!important}
+  .qa-item-del{background:none;border:none;font-size:18px;color:#ccc;cursor:pointer;padding:0;line-height:1;font-family:inherit;-webkit-tap-highlight-color:transparent}
+  .qa-item-del:active{color:#dc2626}
+  #mob-qa-sheet .qa-add-item{width:100%;padding:11px;font-size:14px;font-weight:700;border:1.5px dashed #d1d5db;border-radius:11px;background:#fafafa;color:#888;cursor:pointer;font-family:inherit;margin-bottom:14px;-webkit-tap-highlight-color:transparent}
 }
 @media print{
   .topbar,.tabs,.sbr,.sec-label,button,.back-btn,.mg,.cg,
@@ -3985,10 +4010,8 @@ function sumShareImage(cid,date){
     var mid=y+ROW_H/2+5;
     /* product name */
     txt(line.name,CX[0],mid,13,'',nameClr,'left',CX[1]-CX[0]-20);
-    /* qty — skip unit if it's just a number */
-    var unitStr=line.unit?line.unit.replace(/^\//,'').trim():'';
-    if(unitStr&&!isNaN(unitStr)) unitStr='';
-    var qStr=parseFloat(line.q).toFixed(line.q%1?2:0)+(unitStr?' '+unitStr:'');
+    /* qty — number only, no unit */
+    var qStr=parseFloat(line.q).toFixed(line.q%1?2:0);
     txt(qStr,CX[1],mid,12,'',numClr,'right');
     /* unit price */
     txt('$'+line.sell.toFixed(2),CX[2],mid,12,'',numClr,'right');
@@ -7154,6 +7177,200 @@ function renderBackorders(){
 /* boot */
 lkInit();
 
+/* ── MOBILE BOTTOM NAV ── */
+function mobNav(tab){
+  // update active state
+  document.querySelectorAll('#mob-bottom-nav .mob-nav-item').forEach(function(el){
+    el.classList.toggle('active', el.dataset.tab===tab);
+  });
+  show(tab);
+  // scroll to top smoothly
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function mobQaOpen(){
+  var ov=document.getElementById('mob-qa-overlay');
+  if(!ov)return;
+  // reset form
+  mobQaReset();
+  ov.classList.add('open');
+  // deactivate all nav items (we're in "add" mode)
+  document.querySelectorAll('#mob-bottom-nav .mob-nav-item').forEach(function(el){
+    el.classList.toggle('active', el.dataset.tab==='__qa__');
+  });
+}
+function mobQaClose(){
+  var ov=document.getElementById('mob-qa-overlay');
+  if(ov) ov.classList.remove('open');
+  document.querySelectorAll('#mob-bottom-nav .mob-nav-item').forEach(function(el){
+    el.classList.remove('active');
+  });
+}
+function mobQaReset(){
+  // populate customer select
+  var cs=document.getElementById('mob-qa-cust');
+  if(cs){
+    cs.innerHTML='<option value="">選擇客戶...</option>';
+    (D.customers||[]).slice().sort(function(a,b){return a.name.localeCompare(b.name,'zh-Hant');}).forEach(function(c){
+      var o=document.createElement('option');o.value=c.id;o.textContent=c.name;cs.appendChild(o);
+    });
+  }
+  // default date = today
+  var di=document.getElementById('mob-qa-date');
+  if(di) di.value=new Date().toISOString().slice(0,10);
+  // default status
+  var st=document.getElementById('mob-qa-status');
+  if(st) st.value='unpaid';
+  // clear items, add one blank row
+  mobQaItemsList=[];
+  var wrap=document.getElementById('mob-qa-items');
+  if(wrap) wrap.innerHTML='';
+  mobQaAddItemRow();
+  var msg=document.getElementById('mob-qa-msg');
+  if(msg){msg.textContent='';msg.style.color='#888';}
+}
+
+var mobQaItemsList=[];
+var mobQaItemCounter=0;
+
+function mobQaAddItemRow(){
+  mobQaItemCounter++;
+  var id='mqi'+mobQaItemCounter;
+  mobQaItemsList.push(id);
+  var wrap=document.getElementById('mob-qa-items');
+  if(!wrap)return;
+  var row=document.createElement('div');
+  row.className='qa-item-row';
+  row.id='row-'+id;
+  // product select
+  var sel=document.createElement('select');
+  sel.id='sel-'+id;
+  sel.innerHTML='<option value="">選擇產品...</option>';
+  (D.stock||[]).filter(function(s){return !s.archived;}).sort(function(a,b){return a.name.localeCompare(b.name,'zh-Hant');}).forEach(function(s){
+    var o=document.createElement('option');o.value=s.id;o.textContent=s.name+(s.unit?' ('+s.unit+')':'');sel.appendChild(o);
+  });
+  // qty input
+  var qty=document.createElement('input');
+  qty.type='number';qty.id='qty-'+id;qty.placeholder='數量';qty.min='0';qty.step='0.01';qty.value='1';
+  // delete btn
+  var del=document.createElement('button');
+  del.className='qa-item-del';del.type='button';del.textContent='✕';
+  del.onclick=function(){
+    mobQaItemsList=mobQaItemsList.filter(function(x){return x!==id;});
+    row.remove();
+  };
+  row.appendChild(sel);row.appendChild(qty);row.appendChild(del);
+  wrap.appendChild(row);
+}
+
+function mobQaSave(){
+  var cid=parseInt(document.getElementById('mob-qa-cust').value);
+  var date=document.getElementById('mob-qa-date').value;
+  var status=document.getElementById('mob-qa-status').value;
+  var msg=document.getElementById('mob-qa-msg');
+
+  if(!cid||!date){
+    msg.textContent='請選擇客戶和日期';msg.style.color='#dc2626';return;
+  }
+
+  var items=[];
+  mobQaItemsList.forEach(function(id){
+    var sid=parseInt((document.getElementById('sel-'+id)||{}).value||'0');
+    var q=parseFloat((document.getElementById('qty-'+id)||{}).value||'0');
+    if(sid&&q>0){
+      var p=sp(sid);
+      items.push({s:sid,q:q,sp:p?p.sell:0,cp:p?p.cost:0});
+    }
+  });
+
+  if(!items.length){
+    msg.textContent='請至少加一件產品';msg.style.color='#dc2626';return;
+  }
+
+  D.orders.push({id:D.nid++,cid:cid,date:date,items:items,status:status});
+  saveData();
+
+  msg.textContent='✓ 訂單已儲存！';msg.style.color='#16a34a';
+  setTimeout(function(){
+    mobQaClose();
+    show('summary');
+    document.querySelectorAll('#mob-bottom-nav .mob-nav-item').forEach(function(el){
+      el.classList.toggle('active',el.dataset.tab==='summary');
+    });
+  },900);
+}
+
+// close overlay on background tap
+document.addEventListener('DOMContentLoaded',function(){
+  var ov=document.getElementById('mob-qa-overlay');
+  if(ov) ov.addEventListener('click',function(e){if(e.target===ov)mobQaClose();});
+});
+
 </script>
+
+<!-- MOBILE BOTTOM NAV -->
+<nav id="mob-bottom-nav" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:2000;background:#fff;border-top:1px solid #e5e7eb;height:60px;align-items:stretch;box-shadow:0 -2px 12px rgba(0,0,0,.08)">
+  <button class="mob-nav-item" data-tab="summary" onclick="mobNav('summary')" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent;font-family:inherit">
+    <span style="font-size:20px">📋</span>
+    <span style="font-size:10px;font-weight:600;color:#888">訂單</span>
+  </button>
+  <button class="mob-nav-item" data-tab="customers" onclick="mobNav('customers')" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent;font-family:inherit">
+    <span style="font-size:20px">👥</span>
+    <span style="font-size:10px;font-weight:600;color:#888">客戶</span>
+  </button>
+  <button class="mob-nav-item" data-tab="__qa__" onclick="mobQaOpen()" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;background:none;border:none;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent;font-family:inherit;position:relative">
+    <span style="width:48px;height:48px;border-radius:50%;background:#1a3a2a;display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;box-shadow:0 4px 14px rgba(26,58,42,.4);margin-top:-14px">＋</span>
+  </button>
+  <button class="mob-nav-item" data-tab="stock" onclick="mobNav('stock')" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent;font-family:inherit">
+    <span style="font-size:20px">📦</span>
+    <span style="font-size:10px;font-weight:600;color:#888">貨品</span>
+  </button>
+  <button class="mob-nav-item" data-tab="internal" onclick="mobNav('internal')" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent;font-family:inherit">
+    <span style="font-size:20px">📝</span>
+    <span style="font-size:10px;font-weight:600;color:#888">管理</span>
+  </button>
+</nav>
+
+<!-- QUICK-ADD BOTTOM SHEET -->
+<div id="mob-qa-overlay">
+  <div id="mob-qa-sheet">
+    <div class="qa-handle"></div>
+    <div class="qa-title">➕ 快速新增訂單</div>
+
+    <label>客戶</label>
+    <select id="mob-qa-cust"><option value="">選擇客戶...</option></select>
+
+    <div class="qa-row">
+      <div>
+        <label>日期</label>
+        <input type="date" id="mob-qa-date">
+      </div>
+      <div>
+        <label>付款狀態</label>
+        <select id="mob-qa-status">
+          <option value="unpaid">未付</option>
+          <option value="partial">部分付</option>
+          <option value="paid">已付</option>
+        </select>
+      </div>
+    </div>
+
+    <label>產品</label>
+    <div id="mob-qa-items"></div>
+    <button class="qa-add-item" type="button" onclick="mobQaAddItemRow()">＋ 加產品</button>
+
+    <div class="qa-btn-row">
+      <button class="qa-cancel" type="button" onclick="mobQaClose()">取消</button>
+      <button class="qa-submit" type="button" onclick="mobQaSave()">儲存訂單</button>
+    </div>
+    <div id="mob-qa-msg" class="qa-msg"></div>
+  </div>
+</div>
+
+<style>
+#mob-bottom-nav .mob-nav-item.active span:last-child{color:#1a3a2a!important;font-weight:800!important}
+#mob-bottom-nav .mob-nav-item.active span:first-child{filter:none}
+</style>
+
 </body>
 </html>
