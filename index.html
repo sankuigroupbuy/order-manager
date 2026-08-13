@@ -5,7 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hills Sweets">
+<meta name="theme-color" content="#1a3a2a">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -1354,6 +1358,87 @@ function gdAutoSave(){
       }
     }).catch(function(){
       if(dot){dot.style.opacity='0';dot.title='Auto-save failed — will retry on next change';}
+    });
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
+   AUTO-LOAD CHECK — called once on page load after Drive reconnects.
+   Silently fetches the Drive backup, compares its timestamp with the
+   last local save. If Drive is strictly newer, loads automatically.
+   No confirm dialog — just a toast. Safe: never loads if Drive is
+   older or same age as local data.
+   ════════════════════════════════════════════════════════════ */
+function gdAutoLoadCheck(){
+  if(!GD.accessToken) return;
+  var dot=document.getElementById('gd-autosync-dot');
+  if(dot){dot.style.opacity='1';dot.title='Checking for latest data…';}
+
+  gdGetFileId(function(fileId){
+    fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media',{
+      headers:{Authorization:'Bearer '+GD.accessToken}
+    }).then(function(r){
+      if(!r.ok){
+        if(dot){dot.style.opacity='0';}
+        return null;
+      }
+      return r.json();
+    }).then(function(payload){
+      if(dot){dot.style.opacity='0';}
+      if(!payload) return;
+      if(!Array.isArray(payload.customers)||!Array.isArray(payload.orders)||!Array.isArray(payload.stock)) return;
+
+      /* compare timestamps */
+      var driveTs = payload.exported ? new Date(payload.exported).getTime() : 0;
+      var localTs = 0;
+      var localSaved = localStorage.getItem('gd_last_saved');
+      if(localSaved){ localTs = new Date(localSaved).getTime(); }
+
+      /* if Drive data is not newer than local, skip */
+      if(driveTs <= localTs + 5000) return; /* 5s tolerance */
+
+      /* Drive has newer data — load silently */
+      D.customers=payload.customers||[];
+      D.stock=payload.stock||[];
+      D.orders=payload.orders||[];
+      D.priceLog=payload.priceLog||[];
+      D.runs=payload.runs||[];
+      D.nid=payload.nid||1;
+
+      if(payload.showcaseDraft){
+        SC.items=payload.showcaseDraft.items||[];
+        SC.nid=payload.showcaseDraft.nid||(SC.items.length?Math.max.apply(null,SC.items.map(function(i){return i.id;}))+1:1);
+        var existingScDraft=null;
+        try{existingScDraft=JSON.parse(localStorage.getItem(SC.CFG_KEY));}catch(e){}
+        if(existingScDraft&&existingScDraft.items){
+          SC.items=SC.items.map(function(it){
+            var ex=existingScDraft.items.find(function(e){return e.id===it.id;});
+            return (ex&&ex.photos&&ex.photos.length)?Object.assign({},it,{photos:ex.photos}):it;
+          });
+        }
+        ofSave(SC.CFG_KEY,{title:payload.showcaseDraft.title||'',intro:payload.showcaseDraft.intro||'',items:SC.items,nid:SC.nid});
+      }
+      if(payload.orderFormDraft) ofSave(OF.CFG_KEY, payload.orderFormDraft);
+      if(payload.showcaseLibrary&&payload.showcaseLibrary.length) ofSave(SC_LIB_KEY, payload.showcaseLibrary);
+
+      /* update localStorage and re-render current view */
+      try{
+        localStorage.setItem(KEYS.customers, JSON.stringify(D.customers));
+        localStorage.setItem(KEYS.stock,     JSON.stringify(D.stock));
+        localStorage.setItem(KEYS.orders,    JSON.stringify(D.orders));
+        localStorage.setItem(KEYS.nid,       D.nid);
+        localStorage.setItem(KEYS.priceLog,  JSON.stringify(D.priceLog));
+        localStorage.setItem(KEYS.runs,      JSON.stringify(D.runs));
+        localStorage.setItem('gd_last_saved', payload.exported);
+      }catch(e){}
+
+      selCust=null;
+      renderDash();
+
+      var driveTimeStr=payload.exported?payload.exported.replace('T',' ').substring(0,16):'';
+      toast('☁️ 已同步最新資料 — '+D.orders.length+' 訂單 ('+driveTimeStr+')');
+    }).catch(function(){
+      if(dot){dot.style.opacity='0';}
     });
   });
 }
@@ -5059,7 +5144,7 @@ function gdMaybeAutoConnect(){
     fetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&pageSize=1',{
       headers:{Authorization:'Bearer '+GD.accessToken}
     }).then(function(r){
-      if(r.ok){ gdShowConnected(); }
+      if(r.ok){ gdShowConnected(); gdAutoLoadCheck(); }
       else { gdClearToken(); gdShowDisconnected(); }
     }).catch(function(){ gdClearToken(); gdShowDisconnected(); });
   }
@@ -7176,6 +7261,25 @@ function renderBackorders(){
 
 /* boot */
 lkInit();
+
+/* ── PWA Service Worker registration ── */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js').then(function(reg){
+      /* check for updates in background */
+      reg.addEventListener('updatefound', function(){
+        var newSW = reg.installing;
+        newSW.addEventListener('statechange', function(){
+          if(newSW.state==='installed' && navigator.serviceWorker.controller){
+            toast('🔄 App updated — refresh to get latest version');
+          }
+        });
+      });
+    }).catch(function(err){
+      console.log('SW registration failed:', err);
+    });
+  });
+}
 
 /* ── MOBILE BOTTOM NAV ── */
 function mobNav(tab){
