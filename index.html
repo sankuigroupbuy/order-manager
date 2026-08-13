@@ -3941,27 +3941,18 @@ function sumShareImage(cid,date){
   }
 
   /* column x-positions (right edge for right-align, centre for badge) */
-  /* Product:left@14  Qty:right@310  Price:right@410  Status:cx@510  Sub:right@666 */
-  var CX=[14,310,410,510,666];
+  /* Product:left@14  Qty:right@290  Price:right@390  Status:cx@480  Sub:right@660 */
+  var CX=[14,290,390,480,660];
 
   var y=0;
 
   /* ── Brand header ── */
   fill('#1a3a2a',0,y,W,BRAND_H);
-  var logoEl=document.querySelector('.topbar-logo-icon img');
-  if(logoEl&&logoEl.complete){
-    try{
-      ctx.save();
-      rRect(14,y+12,40,40,8);ctx.clip();
-      ctx.drawImage(logoEl,14,y+12,40,40);
-      ctx.restore();
-    }catch(e){txt('🌿',14,y+40,26,'','#8fbf9e');}
-  } else {
-    fill('rgba(255,255,255,0.12)',14,y+12,40,40);
-    txt('🌿',18,y+40,22,'','#8fbf9e');
-  }
-  txt('山區團購優惠組',66,y+30,16,'600','#ffffff');
-  txt('HILLS SWEETS NMC  ·  GROUP BUY',66,y+48,10,'','#7aad8c');
+  /* mountain logo: grey circle + emoji */
+  ctx.fillStyle='rgba(255,255,255,0.15)';
+  ctx.beginPath();ctx.arc(14+20,y+32,22,0,Math.PI*2);ctx.fill();
+  txt('🏔️',14+5,y+44,26,'','#fff');
+  txt('山區團購優惠組',72,y+37,17,'600','#ffffff');
   y+=BRAND_H;
 
   /* ── Customer row ── */
@@ -4030,13 +4021,8 @@ function sumShareImage(cid,date){
     paid.forEach(function(l,i){itemRow(l,i,true);});
     /* paid subtotal */
     fill('#f0fdf4',0,y,W,SUBTOT_H);hline(y+SUBTOT_H,'#d1fae5');
-    txt('已付小計',CX[4],y+SUBTOT_H/2+5,11,'500','#16a34a','right');
-    /* shift left of amount */
-    ctx.font='500 11px '+SANS;ctx.textAlign='right';
-    var paidAmtStr='$'+paidTotal.toFixed(2);
-    var paidAmtW=ctx.measureText(paidAmtStr).width;
-    txt('已付小計',CX[4]-paidAmtW-10,y+SUBTOT_H/2+5,11,'','#16a34a','right');
-    txt(paidAmtStr,CX[4],y+SUBTOT_H/2+5,12,'500','#16a34a','right');
+    txt('已付小計（供參考）',14,y+SUBTOT_H/2+5,11,'','#16a34a','left');
+    txt('$'+paidTotal.toFixed(2),CX[4],y+SUBTOT_H/2+5,12,'600','#16a34a','right');
     y+=SUBTOT_H;
   }
 
