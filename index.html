@@ -1443,6 +1443,101 @@ function gdAutoLoadCheck(){
   });
 }
 
+/* ════════════════════════════════════════════════════════════
+   DRIVE PHOTO STORAGE
+   Photos are uploaded to a "Hills Sweets Photos" folder in Drive,
+   made public, and stored as Drive file IDs in SC.items[].photos[].
+   Legacy base64 photos (data:image/...) continue to work unchanged.
+   scPhotoUrl() converts any photo reference to a displayable URL.
+   ════════════════════════════════════════════════════════════ */
+
+var SC_PHOTOS_FOLDER_KEY = 'sc_photos_folder_id';
+
+/* Get or create "Hills Sweets Photos" folder in Drive */
+function gdGetPhotosFolder(cb){
+  var cached=localStorage.getItem(SC_PHOTOS_FOLDER_KEY);
+  if(cached){cb(cached);return;}
+  fetch('https://www.googleapis.com/drive/v3/files?q='+
+    encodeURIComponent("name='Hills Sweets Photos' and mimeType='application/vnd.google-apps.folder' and trashed=false")+
+    '&fields=files(id)',{
+    headers:{Authorization:'Bearer '+GD.accessToken}
+  }).then(function(r){return r.json();}).then(function(d){
+    if(d.files&&d.files.length>0){
+      localStorage.setItem(SC_PHOTOS_FOLDER_KEY,d.files[0].id);
+      cb(d.files[0].id);
+    } else {
+      fetch('https://www.googleapis.com/drive/v3/files',{
+        method:'POST',
+        headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'application/json'},
+        body:JSON.stringify({name:'Hills Sweets Photos',mimeType:'application/vnd.google-apps.folder'})
+      }).then(function(r){return r.json();}).then(function(f){
+        if(f.id) localStorage.setItem(SC_PHOTOS_FOLDER_KEY,f.id);
+        cb(f.id||null);
+      }).catch(function(){cb(null);});
+    }
+  }).catch(function(){cb(null);});
+}
+
+/* Upload a canvas as JPEG to Drive, make it public, return file ID */
+function gdUploadImage(canvas, filename, cb){
+  canvas.toBlob(function(blob){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var base64=e.target.result.split(',')[1];
+      gdGetPhotosFolder(function(folderId){
+        var boundary='ph_upload_'+Date.now();
+        var meta={name:filename,mimeType:'image/jpeg'};
+        if(folderId) meta.parents=[folderId];
+        var body=
+          '--'+boundary+'\r\n'+
+          'Content-Type: application/json\r\n\r\n'+
+          JSON.stringify(meta)+'\r\n'+
+          '--'+boundary+'\r\n'+
+          'Content-Type: image/jpeg\r\n'+
+          'Content-Transfer-Encoding: base64\r\n\r\n'+
+          base64+'\r\n'+
+          '--'+boundary+'--';
+        fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{
+          method:'POST',
+          headers:{
+            Authorization:'Bearer '+GD.accessToken,
+            'Content-Type':'multipart/related; boundary='+boundary
+          },
+          body:body
+        }).then(function(r){return r.json();}).then(function(f){
+          if(f.id){
+            /* make file publicly readable — needed for menu page */
+            fetch('https://www.googleapis.com/drive/v3/files/'+f.id+'/permissions',{
+              method:'POST',
+              headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'application/json'},
+              body:JSON.stringify({role:'reader',type:'anyone'})
+            }).catch(function(){});
+            cb(f.id);
+          } else { cb(null); }
+        }).catch(function(){cb(null);});
+      });
+    };
+    reader.readAsDataURL(blob);
+  },'image/jpeg',0.85);
+}
+
+/* Delete a photo file from Drive (best-effort, silent fail) */
+function gdDeletePhoto(fileId){
+  if(!GD.accessToken||!fileId||fileId.startsWith('data:')) return;
+  fetch('https://www.googleapis.com/drive/v3/files/'+fileId,{
+    method:'DELETE',
+    headers:{Authorization:'Bearer '+GD.accessToken}
+  }).catch(function(){});
+}
+
+/* Convert a photo reference (Drive file ID or legacy base64) to a usable <img src> URL */
+function scPhotoUrl(photo){
+  if(!photo) return '';
+  if(photo.startsWith('data:')) return photo; /* legacy base64 — use as-is */
+  /* Drive file ID → public thumbnail URL, no auth required */
+  return 'https://drive.google.com/thumbnail?id='+photo+'&sz=w600';
+}
+
 function clearAllData(){
   if(document.getElementById('reset-overlay')) return;
   var ov=document.createElement('div');
@@ -6301,9 +6396,26 @@ function scLoadConfig(){
   scUpdateBadge();
 }
 
+function scRecompressPhotos(quality, maxPx){
+  /* Re-encode all in-memory photos at lower quality — called when storage is full */
+  SC.items.forEach(function(it){
+    if(!it.photos||!it.photos.length) return;
+    it.photos=it.photos.map(function(dataUrl){
+      try{
+        var img=new Image();
+        img.src=dataUrl;
+        var canvas=document.createElement('canvas');
+        var ratio=Math.min(maxPx/img.width,maxPx/img.height,1);
+        canvas.width=Math.round(img.width*ratio)||img.width;
+        canvas.height=Math.round(img.height*ratio)||img.height;
+        canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+        return canvas.toDataURL('image/jpeg',quality);
+      }catch(err){ return dataUrl; }
+    });
+  });
+}
+
 function scSaveDraft(){
-  /* Save WITH photos — already compressed to ~40KB each so quota is fine.
-     Fall back to no-photos save only if storage is genuinely full. */
   var cfg={
     title:document.getElementById('sc-title').value.trim(),
     intro:document.getElementById('sc-intro').value.trim(),
@@ -6313,17 +6425,26 @@ function scSaveDraft(){
   try{
     ofSave(SC.CFG_KEY,cfg);
   }catch(e){
-    /* storage full — retry without photos so at least names/prices are saved */
-    console.warn('scSaveDraft: storage full, saving without photos');
-    var noPhotos=Object.assign({},cfg,{
-      items:SC.items.map(function(it){
-        return {id:it.id,name:it.name,price:it.price,unit:it.unit,desc:it.desc,photos:[]};
-      })
-    });
-    try{ofSave(SC.CFG_KEY,noPhotos);}catch(e2){toast('⚠️ Storage full — please delete unused photos or save to Drive');}
+    /* storage full — recompress photos to smaller size and retry */
+    console.warn('scSaveDraft: storage full, recompressing photos');
+    scRecompressPhotos(0.45, 300);
+    cfg.items=SC.items;
+    try{
+      ofSave(SC.CFG_KEY,cfg);
+      toast('📦 Photos auto-compressed to free up space');
+    }catch(e2){
+      /* still full — save without photos */
+      var noPhotos=Object.assign({},cfg,{
+        items:SC.items.map(function(it){
+          return {id:it.id,name:it.name,price:it.price,unit:it.unit,desc:it.desc,photos:[]};
+        })
+      });
+      try{ofSave(SC.CFG_KEY,noPhotos);toast('⚠️ Storage still full — photos removed. Save to Drive to back up.');}
+      catch(e3){toast('⚠️ Storage full — please save to Drive then refresh');}
+    }
   }
   scUpdateBadge();
-  scLibMerge(SC.items); /* library gets full photos for Drive publish */
+  scLibMerge(SC.items);
   return cfg;
 }
 
@@ -6382,7 +6503,7 @@ function scRenderList(){
     var photosHtml='';
     it.photos.forEach(function(ph,pi){
       photosHtml+='<div style="position:relative;width:62px;height:62px;flex-shrink:0">'+
-        '<img src="'+ph+'" style="width:62px;height:62px;object-fit:cover;border-radius:9px;border:1px solid #ddd">'+
+        '<img src="'+scPhotoUrl(ph)+'" style="width:62px;height:62px;object-fit:cover;border-radius:9px;border:1px solid #ddd">'+
         '<button onclick="scDelPhoto('+it.id+','+pi+')" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:#dc2626;color:#fff;border:2px solid #fff;font-size:11px;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center">\u2715</button>'+
         (pi===0?'<span style="position:absolute;bottom:2px;left:2px;background:rgba(26,58,42,.85);color:#fff;font-size:8px;padding:1px 5px;border-radius:4px">主圖</span>':'')+
       '</div>';
@@ -6427,22 +6548,46 @@ function scUploadPhoto(evt,itemId){
   var it=SC.items.find(function(i){return i.id===itemId;});
   if(!it) return;
   if(!it.photos){it.photos=it.photo?[it.photo]:[];delete it.photo;}
-  var done=0;
-  toast('Adding '+files.length+' photo'+(files.length>1?'s':'')+'\u2026');
+  var total=files.length, done=0;
+  toast('Uploading '+total+' photo'+(total>1?'s':'')+'\u2026');
+
   files.forEach(function(file){
     var reader=new FileReader();
     reader.onload=function(e){
       var img=new Image();
       img.onload=function(){
         var canvas=document.createElement('canvas');
-        var MAX=500;
+        /* larger size for Drive storage \u2014 no localStorage limit */
+        var MAX=GD.accessToken?1200:400;
+        var Q=GD.accessToken?0.88:0.65;
         var ratio=Math.min(MAX/img.width,MAX/img.height,1);
         canvas.width=Math.round(img.width*ratio);
         canvas.height=Math.round(img.height*ratio);
         canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
-        it.photos.push(canvas.toDataURL('image/jpeg',0.78));
-        done++;
-        if(done===files.length){scSaveDraft();scRenderList();toast('\u2713 '+done+' photo'+(done>1?'s':'')+' added');}
+
+        function finalize(photoRef){
+          it.photos.push(photoRef);
+          done++;
+          if(done===total){scSaveDraft();scRenderList();toast('\u2713 '+done+' photo'+(done>1?'s':'')+' uploaded to Drive');}
+        }
+
+        if(GD.accessToken){
+          /* upload to Google Drive */
+          var fname='hs_product_'+itemId+'_'+Date.now()+'.jpg';
+          gdUploadImage(canvas,fname,function(fileId){
+            if(fileId){
+              finalize(fileId);
+            } else {
+              /* Drive upload failed \u2014 fall back to base64 */
+              toast('\u26a0\ufe0f Drive upload failed, saving locally');
+              finalize(canvas.toDataURL('image/jpeg',0.65));
+            }
+          });
+        } else {
+          /* Drive not connected \u2014 save as base64 (limited storage) */
+          finalize(canvas.toDataURL('image/jpeg',0.65));
+          if(done===total) toast('\u2139\ufe0f Connect Drive for unlimited photo storage');
+        }
       };
       img.src=e.target.result;
     };
@@ -6454,7 +6599,9 @@ function scUploadPhoto(evt,itemId){
 function scDelPhoto(itemId,photoIdx){
   var it=SC.items.find(function(i){return i.id===itemId;});
   if(!it||!it.photos) return;
-  it.photos.splice(photoIdx,1);
+  var removed=it.photos.splice(photoIdx,1)[0];
+  /* also delete from Drive if it's a Drive file ID */
+  if(removed&&!removed.startsWith('data:')) gdDeletePhoto(removed);
   scSaveDraft();scRenderList();
 }
 
@@ -6518,7 +6665,7 @@ function scRenderLibrary(){
   var html='';
   lib.forEach(function(l,li){
     var isOn=alreadyOn.has(l.name);
-    var thumb=l.photos&&l.photos.length?l.photos[0]:'';
+    var thumb=l.photos&&l.photos.length?scPhotoUrl(l.photos[0]):'';
     var priceStr=l.price!==null&&l.price!==''?'A$'+parseFloat(l.price).toFixed(2)+(l.unit?' / '+l.unit:''):'';
     html+=
       '<div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid #f0f0f0">'+
@@ -6577,7 +6724,10 @@ function scPublish(){
   var pub={
     title:cfg.title||'Hills Sweets NMC',
     intro:cfg.intro||'',
-    items:valid.map(function(i){var phs=i.photos||(i.photo?[i.photo]:[]);return{name:i.name,price:i.price===''?null:i.price,unit:i.unit||'',desc:i.desc||'',photos:phs,photo:phs[0]||null};}),
+    items:valid.map(function(i){
+      var phs=(i.photos||(i.photo?[i.photo]:[])).map(function(ph){return scPhotoUrl(ph);});
+      return{name:i.name,price:i.price===''?null:i.price,unit:i.unit||'',desc:i.desc||'',photos:phs,photo:phs[0]||null};
+    }),
     publishedAt:new Date().toISOString()
   };
 
