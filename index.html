@@ -5996,43 +5996,95 @@ var SC={
 };
 
 /* silently restore photos from Drive backup when showcase opens */
-function scAutoRestorePhotos(cb){
-  if(!GD.accessToken){ if(cb) cb(); return; }
-  /* find the backup file */
-  gdGetFileId(function(fileId){
-    if(!fileId){ if(cb) cb(); return; }
-    fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media',{
-      headers:{Authorization:'Bearer '+GD.accessToken}
-    }).then(function(r){ return r.ok?r.json():null; })
-    .then(function(payload){
-      if(payload&&payload.showcaseDraft&&payload.showcaseDraft.items){
-        /* merge photos from backup into current SC.items */
-        var backupItems=payload.showcaseDraft.items;
-        if(SC.items.length===0){
-          /* nothing loaded yet — use backup items fully */
-          SC.items=backupItems;
-          SC.nid=payload.showcaseDraft.nid||SC.nid;
-        } else {
-          /* merge: match by name, restore photos */
-          SC.items.forEach(function(it){
-            if(it.photos&&it.photos.length) return; /* already has photos */
-            var match=backupItems.find(function(b){return b.name===it.name;});
-            if(match&&match.photos&&match.photos.length) it.photos=match.photos;
-          });
-        }
-        SC.photosLoaded=true;
-        /* update localStorage title/intro */
-        var cfg=ofRead(SC.CFG_KEY)||{};
-        ofSave(SC.CFG_KEY,{
-          title:payload.showcaseDraft.title||cfg.title||'',
-          intro:payload.showcaseDraft.intro||cfg.intro||'',
-          items:SC.items.map(function(it){return {id:it.id,name:it.name,price:it.price,unit:it.unit,desc:it.desc,photos:[]};}),
-          nid:SC.nid
-        });
+/* publish photos to Drive immediately after upload — makes them permanent */
+function scPublishPhotosOnly(){
+  if(!GD.accessToken) return;
+  var valid=SC.items.filter(function(i){return (i.name||'').trim();});
+  if(!valid.length) return;
+  /* read existing published data and update photos only */
+  fetch('https://www.googleapis.com/drive/v3/files?q=name%3D%22'+encodeURIComponent(SC.PUB_FILENAME)+'%22+and+%22'+OF.DRIVE_FOLDER+'%22+in+parents+and+trashed%3Dfalse&fields=files(id)',{
+    headers:{Authorization:'Bearer '+GD.accessToken}
+  }).then(function(r){return r.json();}).then(function(d){
+    var existingFileId=d.files&&d.files.length?d.files[0].id:null;
+    var pub={
+      title:(document.getElementById('sc-title')||{}).value||'',
+      intro:(document.getElementById('sc-intro')||{}).value||'',
+      items:valid.map(function(i){return{name:i.name,price:i.price===''?null:i.price,unit:i.unit||'',desc:i.desc||'',photos:i.photos||[],photo:(i.photos&&i.photos[0])||null};}),
+      publishedAt:new Date().toISOString()
+    };
+    var boundary='hills_sc_photo_'+Date.now();
+    var meta=existingFileId?{name:SC.PUB_FILENAME}:{name:SC.PUB_FILENAME,parents:[OF.DRIVE_FOLDER]};
+    var body='--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+JSON.stringify(meta)+'\r\n--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+JSON.stringify(pub)+'\r\n--'+boundary+'--';
+    fetch((existingFileId?'https://www.googleapis.com/upload/drive/v3/files/'+existingFileId+'?uploadType=multipart':'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart'),{
+      method:existingFileId?'PATCH':'POST',
+      headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'multipart/related; boundary='+boundary},
+      body:body
+    }).then(function(r){return r.json();}).then(function(f){
+      if(f.id){
+        SC.pubFileId=f.id;
+        localStorage.setItem('sc_pub_file_id',f.id);
+        /* make public */
+        fetch('https://www.googleapis.com/drive/v3/files/'+f.id+'/permissions',{
+          method:'POST',headers:{Authorization:'Bearer '+GD.accessToken,'Content-Type':'application/json'},
+          body:JSON.stringify({role:'reader',type:'anyone'})
+        }).catch(function(){});
       }
-      if(cb) cb();
-    }).catch(function(){ if(cb) cb(); });
+    }).catch(function(e){console.error('photo publish error',e);});
+  }).catch(function(e){console.error('photo publish lookup error',e);});
+}
+
+function scAutoRestorePhotos(cb){
+  /* restore photos from hills-showcase-pub.json via Apps Script — works without auth */
+  var SCRIPT='https://script.google.com/macros/s/AKfycbyaoVmbMkgmm6ODjdXHJGbP-KyNbFmxbIeCRDApbLd-jt3stNwxdSE8mrk16ufk8JcFqw/exec';
+  fetch(SCRIPT+'?action=getshowcase')
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(data){scMergeRestoredPhotos(data);if(cb)cb();})
+    .catch(function(){
+      /* fallback: try Drive API if connected */
+      if(!GD.accessToken){if(cb)cb();return;}
+      var fid=SC.pubFileId||localStorage.getItem('sc_pub_file_id');
+      if(!fid){if(cb)cb();return;}
+      fetch('https://www.googleapis.com/drive/v3/files/'+fid+'?alt=media',{
+        headers:{Authorization:'Bearer '+GD.accessToken}
+      }).then(function(r){return r.ok?r.json():null;})
+      .then(function(data){scMergeRestoredPhotos(data);if(cb)cb();})
+      .catch(function(){if(cb)cb();});
+    });
+}
+
+function scMergeRestoredPhotos(data){
+  if(!data||!data.items||!data.items.length) return;
+  var pub=data.items;
+  if(!SC.items||SC.items.length===0){
+    /* populate showcase from published data */
+    SC.items=pub.map(function(it,i){
+      return{id:i+1,name:it.name,price:it.price||'',unit:it.unit||'',desc:it.desc||'',photos:it.photos||[]};
+    });
+    SC.nid=SC.items.length+1;
+    if(data.title){var t=document.getElementById('sc-title');if(t)t.value=data.title;}
+    if(data.intro){var n=document.getElementById('sc-intro');if(n)n.value=data.intro;}
+  } else {
+    /* merge photos into existing showcase items by name */
+    SC.items.forEach(function(it){
+      if(it.photos&&it.photos.length) return;
+      var match=pub.find(function(p){return p.name===it.name;});
+      if(match&&match.photos&&match.photos.length) it.photos=match.photos;
+    });
+  }
+  /* also restore photos into Product Library */
+  var lib=scLibLoad();
+  var changed=false;
+  lib.forEach(function(l){
+    if(l.photos&&l.photos.length&&l.photos[0]&&l.photos[0]!=='__idb__') return; /* already has real photo */
+    var match=pub.find(function(p){return p.name===l.name;});
+    if(match&&match.photos&&match.photos.length){
+      l.photos=match.photos;
+      changed=true;
+    }
   });
+  if(changed) scLibSave(lib);
+  SC.photosLoaded=true;
+  scUpdateBadge();
 }
 
 function scToggleOpen(){
@@ -6315,7 +6367,14 @@ function scUploadPhoto(evt,itemId){
         canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
         it.photos.push(canvas.toDataURL('image/jpeg',0.78));
         done++;
-        if(done===files.length){SC.photosLoaded=true;scSaveDraft();scRenderList();toast('\u2713 '+done+' photo'+(done>1?'s':'')+' added');}
+        if(done===files.length){
+          SC.photosLoaded=true;
+          scSaveDraft();
+          scRenderList();
+          /* auto-publish photos to Drive so they survive page refresh */
+          if(GD.accessToken) scPublishPhotosOnly();
+          toast('\u2713 '+done+' photo'+(done>1?'s':'')+' added');
+        }
       };
       img.src=e.target.result;
     };
