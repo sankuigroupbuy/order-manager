@@ -5995,13 +5995,61 @@ var SC={
   photosLoaded:false  /* true once photos loaded from Drive — prevents localStorage overwrite */
 };
 
+/* silently restore photos from Drive backup when showcase opens */
+function scAutoRestorePhotos(cb){
+  if(!GD.accessToken){ if(cb) cb(); return; }
+  /* find the backup file */
+  gdGetFileId(function(fileId){
+    if(!fileId){ if(cb) cb(); return; }
+    fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media',{
+      headers:{Authorization:'Bearer '+GD.accessToken}
+    }).then(function(r){ return r.ok?r.json():null; })
+    .then(function(payload){
+      if(payload&&payload.showcaseDraft&&payload.showcaseDraft.items){
+        /* merge photos from backup into current SC.items */
+        var backupItems=payload.showcaseDraft.items;
+        if(SC.items.length===0){
+          /* nothing loaded yet — use backup items fully */
+          SC.items=backupItems;
+          SC.nid=payload.showcaseDraft.nid||SC.nid;
+        } else {
+          /* merge: match by name, restore photos */
+          SC.items.forEach(function(it){
+            if(it.photos&&it.photos.length) return; /* already has photos */
+            var match=backupItems.find(function(b){return b.name===it.name;});
+            if(match&&match.photos&&match.photos.length) it.photos=match.photos;
+          });
+        }
+        SC.photosLoaded=true;
+        /* update localStorage title/intro */
+        var cfg=ofRead(SC.CFG_KEY)||{};
+        ofSave(SC.CFG_KEY,{
+          title:payload.showcaseDraft.title||cfg.title||'',
+          intro:payload.showcaseDraft.intro||cfg.intro||'',
+          items:SC.items.map(function(it){return {id:it.id,name:it.name,price:it.price,unit:it.unit,desc:it.desc,photos:[]};}),
+          nid:SC.nid
+        });
+      }
+      if(cb) cb();
+    }).catch(function(){ if(cb) cb(); });
+  });
+}
+
 function scToggleOpen(){
   var b=document.getElementById('sc-body');
   var btn=document.getElementById('sc-toggle-btn');
   var open=b.style.display!=='none';
   b.style.display=open?'none':'block';
   btn.textContent=open?'Open \u25be':'Close \u25b4';
-  if(!open){scLoadConfig();scRenderList();scFetchViews();}
+  if(!open){
+    scLoadConfig();
+    if(!SC.photosLoaded&&GD.accessToken){
+      /* auto-restore photos from Drive backup silently */
+      scAutoRestorePhotos(function(){ scRenderList();scFetchViews(); });
+    } else {
+      scRenderList();scFetchViews();
+    }
+  }
 }
 
 function scLoadConfig(){
