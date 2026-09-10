@@ -5072,6 +5072,7 @@ function gdLoad(){
         /* restore full showcase including photos into memory */
         SC.items=payload.showcaseDraft.items||[];
         SC.nid=payload.showcaseDraft.nid||(SC.items.length?Math.max.apply(null,SC.items.map(function(i){return i.id;}))+1:1);
+        SC.photosLoaded=true; /* prevent scLoadConfig from overwriting photos */
         /* save text-only version to localStorage */
         var draftNoPhotos={
           title:payload.showcaseDraft.title||'',
@@ -5988,9 +5989,10 @@ function ofDriveWritePub(pubData,cb){
 var SC={
   CFG_KEY:'om_sc_cfg',
   PUB_FILENAME:'hills-showcase-pub.json',
-  items:[],          /* [{id,name,price,desc,photo}] — free-form, independent of stock */
+  items:[],
   nid:1,
-  pubFileId:null
+  pubFileId:null,
+  photosLoaded:false  /* true once photos loaded from Drive — prevents localStorage overwrite */
 };
 
 function scToggleOpen(){
@@ -6003,21 +6005,20 @@ function scToggleOpen(){
 }
 
 function scLoadConfig(){
-  /* if SC.items already populated from gdLoad (with photos), don't overwrite */
-  if(SC.items&&SC.items.length>0){
-    /* just restore title/intro from localStorage */
-    var cfg=ofRead(SC.CFG_KEY);
+  /* if photos already loaded from Drive, only restore title/intro — never overwrite photos */
+  var cfg=ofRead(SC.CFG_KEY);
+  if(SC.photosLoaded){
     if(cfg){
       document.getElementById('sc-title').value=cfg.title||'';
       document.getElementById('sc-intro').value=cfg.intro||'';
     }
     scUpdateBadge();return;
   }
-  var cfg=ofRead(SC.CFG_KEY);
   if(!cfg) return;
   document.getElementById('sc-title').value=cfg.title||'';
   document.getElementById('sc-intro').value=cfg.intro||'';
-  SC.items=cfg.items||[]; /* photos will be empty [] — that's fine, user re-uploads or loads from Drive */
+  /* load items without photos (photos:[] from localStorage) */
+  SC.items=cfg.items||[];
   SC.nid=cfg.nid||(SC.items.length?Math.max.apply(null,SC.items.map(function(i){return i.id;}))+1:1);
   scUpdateBadge();
 }
@@ -6266,7 +6267,7 @@ function scUploadPhoto(evt,itemId){
         canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
         it.photos.push(canvas.toDataURL('image/jpeg',0.78));
         done++;
-        if(done===files.length){scSaveDraft();scRenderList();toast('\u2713 '+done+' photo'+(done>1?'s':'')+' added');}
+        if(done===files.length){SC.photosLoaded=true;scSaveDraft();scRenderList();toast('\u2713 '+done+' photo'+(done>1?'s':'')+' added');}
       };
       img.src=e.target.result;
     };
