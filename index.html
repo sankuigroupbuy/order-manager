@@ -6326,12 +6326,24 @@ function scRenderLibrary(){
           (priceStr?'<div style="font-size:11px;color:#1a3a2a;font-weight:600">'+esc(priceStr)+'</div>':'')+
         '</div>'+
         (isOn?
-          '<button class="btn btn-sm" style="white-space:nowrap;font-size:11px;color:#16a34a;background:#f0fdf4;border:1px solid #bbf7d0;font-weight:700" onclick="scLibRemoveByName('+JSON.stringify(l.name)+')">✓ On page</button>':
-          '<button class="btn btn-o btn-sm" style="white-space:nowrap;font-size:12px" onclick="scLibReAddByName('+JSON.stringify(l.name)+')">+ Add</button>'
+          '<button class="btn btn-sm lib-remove-btn" data-lib-name="'+esc(l.name)+'" style="white-space:nowrap;font-size:11px;color:#16a34a;background:#f0fdf4;border:1px solid #bbf7d0;font-weight:700">✓ On page</button>':
+          '<button class="btn btn-o btn-sm lib-add-btn" data-lib-name="'+esc(l.name)+'" style="white-space:nowrap;font-size:12px">+ Add</button>'
         )+
       '</div>';
   });
   list.innerHTML=html;
+  scWireLibraryButtons();
+}
+
+function scWireLibraryButtons(){
+  var list=document.getElementById('sc-lib-list');
+  if(!list) return;
+  list.querySelectorAll('.lib-add-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){scLibReAddByName(btn.getAttribute('data-lib-name'));});
+  });
+  list.querySelectorAll('.lib-remove-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){scLibRemoveByName(btn.getAttribute('data-lib-name'));});
+  });
 }
 
 function scLibReAddByName(name){
@@ -6339,40 +6351,18 @@ function scLibReAddByName(name){
   var l=lib.find(function(item){return item.name===name;});
   if(!l){toast('Not found in library');return;}
   if(SC.items.find(function(i){return i.name===name;})){toast(name+' is already on the page');return;}
-  SC.items.push({id:SC.nid++,name:l.name,price:l.price||'',unit:l.unit||'',desc:l.desc||'',photos:[],type:'product'});
+  SC.items.push({id:SC.nid++,name:l.name,price:l.price||'',unit:l.unit||'',desc:l.desc||'',photos:l.photos||[],type:'product'});
   try{scSaveDraft();}catch(e){console.error(e);}
   scRenderList();scRenderLibrary();
   toast('\u2713 '+l.name+' added');
 }
 
+/* remove a product from the current page (keeps it in library) */
 function scLibRemoveByName(name){
   SC.items=SC.items.filter(function(i){return i.name!==name;});
   try{scSaveDraft();}catch(e){console.error(e);}
   scRenderList();scRenderLibrary();
   toast(name+' removed from page \u2014 still in library');
-}
-
-function scLibReAddByName(name){
-  var lib=scLibLoad();
-  var l=lib.find(function(item){return item.name===name;});
-  if(!l) return;
-  /* check not already on page */
-  if(SC.items.find(function(i){return i.name===l.name;})){
-    toast(l.name+' is already on the page');return;
-  }
-  SC.items.push({id:SC.nid++,name:l.name,price:l.price,unit:l.unit||'',desc:l.desc||'',photos:l.photos||[]});
-  scSaveDraft();scRenderList();scRenderLibrary();
-  toast('✓ '+l.name+' added to showcase');
-}
-
-/* remove a product from the current page (keeps it in library) */
-function scLibRemoveByName(name){
-  var lib=scLibLoad();
-  var l=lib.find(function(item){return item.name===name;});
-  if(!l) return;
-  SC.items=SC.items.filter(function(i){return i.name!==l.name;});
-  scSaveDraft();scRenderList();scRenderLibrary();
-  toast(l.name+' removed from page — still saved in library');
 }
 
 /* ── publish: write hills-showcase-pub.json to public Drive folder ── */
