@@ -6106,6 +6106,7 @@ function scRenderList(){
   if(!wrap) return;
   if(!SC.items.length){wrap.innerHTML='<div class="empty" style="padding:14px">No products yet — tap \uFF0B Add product below.</div>';scUpdateBadge();return;}
   var html='';
+  var plCards=[];
   SC.items.forEach(function(it,idx){
     if(it.type==='pricelist'){
       plCards.push({id:it.id,card:scBuildPriceListCard(it)});
