@@ -6055,6 +6055,8 @@ function scBuildPriceListCard(it){
   var wrap=document.createElement('div');
   wrap.className='sc-drag-card';
   wrap.dataset.id=String(it.id);
+  wrap.dataset.scId=String(it.id);
+  wrap.draggable=true;
   wrap.style.cssText='padding:11px;border:2px solid #1a3a2a;border-radius:12px;margin-bottom:8px;background:#f0fdf4;cursor:default';
   var handle=document.createElement('div');
   handle.className='sc-drag-handle';
@@ -6131,8 +6133,10 @@ function scRenderList(){
       '<input type="file" accept="image/*" multiple style="display:none" onchange="scUploadPhoto(event,'+it.id+')">'+
     '</label>';
 
-    html+='<div style="padding:11px;border:1.5px solid #e5e5e5;border-radius:12px;margin-bottom:8px;background:#fff">'+
+    html+='<div class="sc-item-card" draggable="true" data-sc-id="'+it.id+'" style="padding:11px;border:1.5px solid #e5e5e5;border-radius:12px;margin-bottom:8px;background:#fff">'+
       '<div style="display:flex;gap:10px;align-items:flex-start">'+
+      /* drag handle */
+      '<div class="sc-drag-handle" title="Drag to reorder" style="display:flex;flex-direction:column;justify-content:center;align-items:center;width:20px;flex-shrink:0;cursor:grab;color:#bbb;font-size:16px;padding-top:6px;user-select:none">\u2630</div>'+
       /* fields */
       '<div style="flex:1;min-width:0">'+
         '<div style="display:flex;gap:8px;margin-bottom:6px">'+
@@ -6161,6 +6165,56 @@ function scRenderList(){
     else wrap.appendChild(pc.card);
   });
   scUpdateBadge();
+  scWireDrag();
+}
+
+function scWireDrag(){
+  var wrap=document.getElementById('sc-list');
+  if(!wrap) return;
+  var dragId=null,dragEl=null;
+  var cards=wrap.querySelectorAll('[data-sc-id]');
+  cards.forEach(function(card){
+    card.addEventListener('dragstart',function(e){
+      dragId=parseInt(card.getAttribute('data-sc-id'),10);
+      dragEl=card;
+      e.dataTransfer.effectAllowed='move';
+      try{e.dataTransfer.setData('text/plain',String(dragId));}catch(err){}
+      setTimeout(function(){card.style.opacity='0.4';},0);
+    });
+    card.addEventListener('dragend',function(){
+      card.style.opacity='';
+      cards.forEach(function(c){c.style.borderTop='';c.style.borderBottom='';});
+      dragId=null;dragEl=null;
+    });
+    card.addEventListener('dragover',function(e){
+      e.preventDefault();
+      e.dataTransfer.dropEffect='move';
+      if(!dragEl||card===dragEl) return;
+      var rect=card.getBoundingClientRect();
+      var before=(e.clientY-rect.top)<rect.height/2;
+      card.style.borderTop=before?'3px solid #1a3a2a':'';
+      card.style.borderBottom=before?'':'3px solid #1a3a2a';
+    });
+    card.addEventListener('dragleave',function(){
+      card.style.borderTop='';card.style.borderBottom='';
+    });
+    card.addEventListener('drop',function(e){
+      e.preventDefault();
+      var dropId=parseInt(card.getAttribute('data-sc-id'),10);
+      card.style.borderTop='';card.style.borderBottom='';
+      if(dragId===null||dragId===dropId) return;
+      var fromIdx=SC.items.findIndex(function(i){return i.id===dragId;});
+      var toIdx=SC.items.findIndex(function(i){return i.id===dropId;});
+      if(fromIdx<0||toIdx<0) return;
+      var rect=card.getBoundingClientRect();
+      var before=(e.clientY-rect.top)<rect.height/2;
+      var moved=SC.items.splice(fromIdx,1)[0];
+      var insertAt=SC.items.findIndex(function(i){return i.id===dropId;});
+      if(!before) insertAt+=1;
+      SC.items.splice(insertAt,0,moved);
+      scSaveDraft();scRenderList();
+    });
+  });
 }
 
 /* photo upload for showcase item */
