@@ -1263,7 +1263,7 @@ function gdAutoSave(){
      showcase draft is read live from memory (WITH photos); localStorage
      copy is intentionally photo-stripped to avoid quota errors */
   var scDraft=scFullDraft();
-  var ofDraft=ofRead(OF.CFG_KEY)||null;
+  var ofDraft=ofFullDraft();
   var scLib=ofRead(SC_LIB_KEY)||[];
   var payload=JSON.stringify({
     version:1,
@@ -4947,7 +4947,7 @@ function gdSave(){
   saveBtn.classList.add('loading');
 
   var scDraft2=scFullDraft();
-  var ofDraft2=ofRead(OF.CFG_KEY)||null;
+  var ofDraft2=ofFullDraft();
   var scLib2=ofRead(SC_LIB_KEY)||[];
   var payload=JSON.stringify({
     version:1,
@@ -5065,13 +5065,35 @@ function gdLoad(){
           title:sd.title||'',intro:sd.intro||'',nid:SC.nid,
           items:SC.items.map(function(it){
             var c={};for(var k in it){c[k]=it[k];}
-            c.photos=[];if('photo' in c) c.photo=null;
+            c.photos=(it.photos||[]).filter(function(p){return !isHeavyPhoto(p);});
+            if('photo' in c && isHeavyPhoto(c.photo)) c.photo=null;
             return c;
           })
         };
         ofSave(SC.CFG_KEY, strippedSd);
       }
-      if(payload.orderFormDraft) ofSave(OF.CFG_KEY, payload.orderFormDraft);
+      if(payload.orderFormDraft){
+        var od=payload.orderFormDraft;
+        OF.sel=new Set(od.selectedIds||[]);
+        OF.photos=od.photos||{};
+        OF.notes=od.notes||{};
+        var opEl=document.getElementById('of-period'),ocEl=document.getElementById('of-cutoff'),
+            olEl=document.getElementById('of-location'),opuEl=document.getElementById('of-pickup'),
+            onEl=document.getElementById('of-notice');
+        if(opEl) opEl.value=od.period||'';
+        if(ocEl) ocEl.value=od.cutoff||'';
+        if(olEl) olEl.value=od.location||'';
+        if(opuEl) opuEl.value=od.pickup||'';
+        if(onEl) onEl.value=od.notice||'';
+        var strippedOd={};
+        for(var ok in od){strippedOd[ok]=od[ok];}
+        var filteredOfPhotos={};
+        for(var pid2 in (OF.photos||{})){
+          if(!isHeavyPhoto(OF.photos[pid2])) filteredOfPhotos[pid2]=OF.photos[pid2];
+        }
+        strippedOd.photos=filteredOfPhotos;
+        ofSave(OF.CFG_KEY, strippedOd);
+      }
       if(payload.showcaseLibrary&&payload.showcaseLibrary.length) ofSave(SC_LIB_KEY, payload.showcaseLibrary);
       saveData();
       selCust=null;
@@ -5782,7 +5804,8 @@ function ofClearAll(){
   ofRenderPicker();
 }
 
-/* ── photo upload: compress to max ~300px wide, store base64 ── */
+/* ── photo upload: compress, then upload to Drive via Apps Script
+   and store the returned URL (not base64 text) ── */
 function ofUploadPhoto(evt,stockId){
   var file=evt.target.files[0];
   if(!file) return;
@@ -5796,9 +5819,27 @@ function ofUploadPhoto(evt,stockId){
       canvas.width=Math.round(img.width*ratio);
       canvas.height=Math.round(img.height*ratio);
       canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
-      OF.photos[stockId]=canvas.toDataURL('image/jpeg',0.75);
-      ofRenderPicker();
-      toast('Photo saved for '+esc((D.stock.find(function(s){return s.id===stockId;})||{}).name||'item'));
+      var dataUrl=canvas.toDataURL('image/jpeg',0.75);
+      var stockName=(D.stock.find(function(s){return s.id===stockId;})||{}).name||'item';
+      toast('Uploading photo\u2026');
+      fetch(OF.SCRIPT_URL,{
+        method:'POST',
+        body:JSON.stringify({
+          key:SC_API_KEY,action:'uploadphoto',
+          photoBase64:dataUrl,
+          filename:'of-'+stockId+'-'+Date.now()+'.jpg'
+        })
+      }).then(function(r){return r.json();})
+        .then(function(res){
+          if(res&&res.status==='ok'&&res.url){
+            OF.photos[stockId]=res.url;
+            ofSaveDraft();ofRenderPicker();
+            toast('\u2713 Photo saved for '+esc(stockName));
+          } else {
+            toast('\u26a0 Upload failed');
+          }
+        })
+        .catch(function(){ toast('\u26a0 Upload failed \u2014 check connection'); });
     };
     img.src=e.target.result;
   };
@@ -5823,8 +5864,33 @@ function ofSaveDraft(){
     photos:  OF.photos,
     notes:   OF.notes
   };
-  ofSave(OF.CFG_KEY,cfg);
+  /* same rule as Showcase: keep lightweight photo URLs, strip only
+     old base64 blobs (quota risk), so newly-added photos survive a
+     refresh without needing a Drive round-trip */
+  var forStorage={};
+  for(var k in cfg){forStorage[k]=cfg[k];}
+  var filteredPhotos={};
+  for(var pid in (OF.photos||{})){
+    if(!isHeavyPhoto(OF.photos[pid])) filteredPhotos[pid]=OF.photos[pid];
+  }
+  forStorage.photos=filteredPhotos;
+  ofSave(OF.CFG_KEY,forStorage);
   return cfg;
+}
+
+/* full-fidelity Order Form draft straight from memory (WITH photos) —
+   used for Drive backups only, never for localStorage */
+function ofFullDraft(){
+  return{
+    period:  document.getElementById('of-period').value.trim(),
+    cutoff:  document.getElementById('of-cutoff').value.trim(),
+    location:document.getElementById('of-location').value.trim(),
+    pickup:  document.getElementById('of-pickup').value.trim(),
+    notice:  document.getElementById('of-notice').value.trim(),
+    selectedIds:[...OF.sel],
+    photos:  OF.photos,
+    notes:   OF.notes
+  };
 }
 
 /* ── publish: seed counts from D.orders, save locally + write to Drive ── */
@@ -6010,14 +6076,17 @@ function scSaveDraft(){
     items:SC.items,
     nid:SC.nid
   };
-  /* localStorage has a ~5MB quota shared by the whole app — photos (base64)
-     are kept in memory + published to Drive, but NEVER written to localStorage.
-     Reopening the Showcase panel restores photos from the last publish/Drive load. */
+  /* localStorage has a ~5MB quota shared by the whole app. Lightweight
+     photo URLs (from the Drive uploader) are cheap and safe to keep here
+     — only OLD base64 photos (not yet migrated) get stripped, since those
+     are the actual quota risk. This is what makes newly-added photos
+     survive a refresh without needing a Drive round-trip. */
   var forStorage={
     title:cfg.title,intro:cfg.intro,nid:cfg.nid,
     items:SC.items.map(function(it){
       var c={};for(var k in it){c[k]=it[k];}
-      c.photos=[];if('photo' in c) c.photo=null;
+      c.photos=(it.photos||[]).filter(function(p){return !isHeavyPhoto(p);});
+      if('photo' in c && isHeavyPhoto(c.photo)) c.photo=null;
       return c;
     })
   };
@@ -6025,6 +6094,67 @@ function scSaveDraft(){
   scUpdateBadge();
   scLibMerge(SC.items); /* auto-save all named items to library */
   return cfg;
+}
+
+/* a "heavy" photo is an old base64 data URI (huge text) — a real URL
+   from the Drive photo uploader is just a short link and safe to store */
+function isHeavyPhoto(p){
+  return typeof p==='string' && p.indexOf('data:')===0;
+}
+
+/* photo upload for showcase item — sends to the Apps Script Drive
+   uploader and stores the returned URL instead of a giant base64
+   text blob (this is the fix for both storage-full errors and the
+   slow-loading public menu page) */
+var SC_API_KEY='hills-hgb-2026';
+function scUploadPhoto(evt,itemId){
+  var files=Array.prototype.slice.call(evt.target.files||[]);
+  if(!files.length) return;
+  var it=SC.items.find(function(i){return i.id===itemId;});
+  if(!it) return;
+  if(!it.photos){it.photos=it.photo?[it.photo]:[];delete it.photo;}
+  var total=files.length,done=0,failed=0;
+  toast('Uploading '+total+' photo'+(total>1?'s':'')+'\u2026');
+  files.forEach(function(file){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        var canvas=document.createElement('canvas');
+        var MAX=500;
+        var ratio=Math.min(MAX/img.width,MAX/img.height,1);
+        canvas.width=Math.round(img.width*ratio);
+        canvas.height=Math.round(img.height*ratio);
+        canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+        var dataUrl=canvas.toDataURL('image/jpeg',0.78);
+        fetch(OF.SCRIPT_URL,{
+          method:'POST',
+          body:JSON.stringify({
+            key:SC_API_KEY,action:'uploadphoto',
+            photoBase64:dataUrl,
+            filename:'sc-'+itemId+'-'+Date.now()+'.jpg'
+          })
+        }).then(function(r){return r.json();})
+          .then(function(res){
+            done++;
+            if(res&&res.status==='ok'&&res.url){ it.photos.push(res.url); }
+            else { failed++; }
+            if(done===total) finishScUpload();
+          })
+          .catch(function(){
+            done++;failed++;
+            if(done===total) finishScUpload();
+          });
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  function finishScUpload(){
+    scSaveDraft();scRenderList();
+    if(failed) toast('\u26a0 '+(total-failed)+' uploaded, '+failed+' failed \u2014 check connection');
+    else toast('\u2713 '+total+' photo'+(total>1?'s':'')+' uploaded');
+  }
 }
 
 /* full-fidelity draft straight from memory (WITH photos) — used for Drive
@@ -6255,36 +6385,6 @@ function scWireDrag(){
       SC.items.splice(insertAt,0,moved);
       scSaveDraft();scRenderList();
     });
-  });
-}
-
-/* photo upload for showcase item */
-function scUploadPhoto(evt,itemId){
-  var files=Array.prototype.slice.call(evt.target.files||[]);
-  if(!files.length) return;
-  var it=SC.items.find(function(i){return i.id===itemId;});
-  if(!it) return;
-  if(!it.photos){it.photos=it.photo?[it.photo]:[];delete it.photo;}
-  var done=0;
-  toast('Adding '+files.length+' photo'+(files.length>1?'s':'')+'\u2026');
-  files.forEach(function(file){
-    var reader=new FileReader();
-    reader.onload=function(e){
-      var img=new Image();
-      img.onload=function(){
-        var canvas=document.createElement('canvas');
-        var MAX=500;
-        var ratio=Math.min(MAX/img.width,MAX/img.height,1);
-        canvas.width=Math.round(img.width*ratio);
-        canvas.height=Math.round(img.height*ratio);
-        canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
-        it.photos.push(canvas.toDataURL('image/jpeg',0.78));
-        done++;
-        if(done===files.length){scSaveDraft();scRenderList();toast('\u2713 '+done+' photo'+(done>1?'s':'')+' added');}
-      };
-      img.src=e.target.result;
-    };
-    reader.readAsDataURL(file);
   });
 }
 
