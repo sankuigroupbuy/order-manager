@@ -6113,7 +6113,7 @@ function scUploadPhoto(evt,itemId){
   var it=SC.items.find(function(i){return i.id===itemId;});
   if(!it) return;
   if(!it.photos){it.photos=it.photo?[it.photo]:[];delete it.photo;}
-  var total=files.length,done=0,failed=0;
+  var total=files.length,done=0,failed=0,lastErr='';
   toast('Uploading '+total+' photo'+(total>1?'s':'')+'\u2026');
   files.forEach(function(file){
     var reader=new FileReader();
@@ -6138,11 +6138,12 @@ function scUploadPhoto(evt,itemId){
           .then(function(res){
             done++;
             if(res&&res.status==='ok'&&res.url){ it.photos.push(res.url); }
-            else { failed++; }
+            else { failed++; lastErr=(res&&res.message)||'server returned no URL'; console.error('Photo upload failed:',res); }
             if(done===total) finishScUpload();
           })
-          .catch(function(){
-            done++;failed++;
+          .catch(function(err){
+            done++;failed++;lastErr='network/connection error: '+err;
+            console.error('Photo upload network error:',err);
             if(done===total) finishScUpload();
           });
       };
@@ -6152,7 +6153,7 @@ function scUploadPhoto(evt,itemId){
   });
   function finishScUpload(){
     scSaveDraft();scRenderList();
-    if(failed) toast('\u26a0 '+(total-failed)+' uploaded, '+failed+' failed \u2014 check connection');
+    if(failed) toast('\u26a0 '+(total-failed)+' uploaded, '+failed+' failed: '+lastErr);
     else toast('\u2713 '+total+' photo'+(total>1?'s':'')+' uploaded');
   }
 }
