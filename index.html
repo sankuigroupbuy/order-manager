@@ -1259,8 +1259,10 @@ function gdAutoSave(){
   var dot=document.getElementById('gd-autosync-dot');
   if(dot){dot.style.opacity='1';dot.title='Auto-saving…';}
 
-  /* include showcase + order form drafts so they sync across devices */
-  var scDraft=ofRead(SC.CFG_KEY)||null;
+  /* include showcase + order form drafts so they sync across devices —
+     showcase draft is read live from memory (WITH photos); localStorage
+     copy is intentionally photo-stripped to avoid quota errors */
+  var scDraft=scFullDraft();
   var ofDraft=ofRead(OF.CFG_KEY)||null;
   var scLib=ofRead(SC_LIB_KEY)||[];
   var payload=JSON.stringify({
@@ -4944,7 +4946,7 @@ function gdSave(){
   var saveBtn=document.getElementById('gd-save-btn');
   saveBtn.classList.add('loading');
 
-  var scDraft2=ofRead(SC.CFG_KEY)||null;
+  var scDraft2=scFullDraft();
   var ofDraft2=ofRead(OF.CFG_KEY)||null;
   var scLib2=ofRead(SC_LIB_KEY)||[];
   var payload=JSON.stringify({
@@ -5047,8 +5049,28 @@ function gdLoad(){
       D.priceLog=payload.priceLog||[];
       D.runs=payload.runs||[];
       D.nid=payload.nid||1;
-      /* restore showcase + order form drafts if present in backup */
-      if(payload.showcaseDraft) ofSave(SC.CFG_KEY, payload.showcaseDraft);
+      /* restore showcase + order form drafts if present in backup.
+         Showcase draft from Drive has full photos — apply it straight to
+         the live in-memory SC object (so photos show immediately this
+         session), then write a PHOTO-STRIPPED copy to localStorage so we
+         don't instantly refill the quota with the same data we just fixed. */
+      if(payload.showcaseDraft){
+        var sd=payload.showcaseDraft;
+        SC.items=sd.items||[];
+        SC.nid=sd.nid||(SC.items.length?Math.max.apply(null,SC.items.map(function(i){return i.id;}))+1:1);
+        var tEl=document.getElementById('sc-title'),iEl=document.getElementById('sc-intro');
+        if(tEl) tEl.value=sd.title||'';
+        if(iEl) iEl.value=sd.intro||'';
+        var strippedSd={
+          title:sd.title||'',intro:sd.intro||'',nid:SC.nid,
+          items:SC.items.map(function(it){
+            var c={};for(var k in it){c[k]=it[k];}
+            c.photos=[];if('photo' in c) c.photo=null;
+            return c;
+          })
+        };
+        ofSave(SC.CFG_KEY, strippedSd);
+      }
       if(payload.orderFormDraft) ofSave(OF.CFG_KEY, payload.orderFormDraft);
       if(payload.showcaseLibrary&&payload.showcaseLibrary.length) ofSave(SC_LIB_KEY, payload.showcaseLibrary);
       saveData();
@@ -5988,10 +6010,29 @@ function scSaveDraft(){
     items:SC.items,
     nid:SC.nid
   };
-  ofSave(SC.CFG_KEY,cfg);
+  /* localStorage has a ~5MB quota shared by the whole app — photos (base64)
+     are kept in memory + published to Drive, but NEVER written to localStorage.
+     Reopening the Showcase panel restores photos from the last publish/Drive load. */
+  var forStorage={
+    title:cfg.title,intro:cfg.intro,nid:cfg.nid,
+    items:SC.items.map(function(it){
+      var c={};for(var k in it){c[k]=it[k];}
+      c.photos=[];if('photo' in c) c.photo=null;
+      return c;
+    })
+  };
+  ofSave(SC.CFG_KEY,forStorage);
   scUpdateBadge();
   scLibMerge(SC.items); /* auto-save all named items to library */
   return cfg;
+}
+
+/* full-fidelity draft straight from memory (WITH photos) — used for Drive
+   backups only, never for localStorage, so backups stay complete even
+   though the local draft is photo-stripped to avoid quota errors */
+function scFullDraft(){
+  var tEl=document.getElementById('sc-title'),iEl=document.getElementById('sc-intro');
+  return{title:tEl?tEl.value.trim():'',intro:iEl?iEl.value.trim():'',items:SC.items,nid:SC.nid};
 }
 
 function scUpdateBadge(){
@@ -6276,13 +6317,16 @@ function scLibMerge(items){
   items.forEach(function(it){
     if(!(it.name||'').trim()) return; /* skip blank items */
     var ex=lib.find(function(l){return l.libId===it.id||l.name===it.name;});
+    /* library only ever shows a single small thumbnail (46x46px) — keep just
+       the first photo, not the whole gallery, to avoid needless storage growth */
+    var thumbPhotos=(it.photos||[]).slice(0,1);
     if(ex){
       /* update existing entry */
       ex.name=it.name;ex.price=it.price;ex.unit=it.unit;ex.desc=it.desc;
-      ex.photos=it.photos||[];ex.updatedAt=Date.now();
+      ex.photos=thumbPhotos;ex.updatedAt=Date.now();
     } else {
       lib.push({libId:it.id,name:it.name,price:it.price,unit:it.unit,desc:it.desc,
-                photos:it.photos||[],addedAt:Date.now(),updatedAt:Date.now()});
+                photos:thumbPhotos,addedAt:Date.now(),updatedAt:Date.now()});
     }
   });
   scLibSave(lib);
