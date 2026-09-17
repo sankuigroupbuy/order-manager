@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3553,12 +3554,13 @@ function renderSummary(){
     var tickBtn=isPaid
       ?'<button onclick="sumTogglePaid('+m.cid+',\''+m.date+'\')" style="padding:5px 12px;font-size:12px;font-weight:700;border:none;border-radius:6px;background:#16a34a;color:#fff;cursor:pointer">✓ Paid</button>'
       :'<button onclick="sumTogglePaid('+m.cid+',\''+m.date+'\')" style="padding:5px 12px;font-size:12px;font-weight:600;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#555;cursor:pointer">Mark paid</button>';
+    var waBtn='<button onclick="sumShareImage('+m.cid+',\''+m.date+'\')" title="Share order image" style="padding:5px 12px;font-size:12px;font-weight:700;border:none;border-radius:6px;background:#1a3a2a;color:#fff;cursor:pointer;white-space:nowrap">📤 Share</button>';
     html+=
       '<tr class="subtotal-row" style="'+rowBg+'">'+ 
         '<td colspan="4" style="text-align:right;padding-right:14px;font-weight:700;color:#1a1a1a">'+esc(cname)+' total</td>'+
         '<td class="num" style="font-weight:700">'+blockTotal.toFixed(2)+'</td>'+
         '<td style="text-align:center;padding:6px 8px">'+tickBtn+'</td>'+
-        '<td></td>'+
+        '<td style="text-align:center;padding:4px 6px;white-space:nowrap">'+waBtn+'</td>'+
       '</tr>';
   });
 
@@ -3648,8 +3650,9 @@ function renderSummary(){
           '</div>'+
           '<div class="dcard-items">'+itemsHtml+'</div>'+
           progBar+
-          '<div class="dcard-footer">'+
-            '<button class="'+payCls+'" id="dpaybtn-'+m.cid+'" data-cid="'+m.cid+'" data-date="'+m.date+'">'+payTxt+'</button>'+
+          '<div class="dcard-footer" style="display:flex;gap:8px;align-items:center">'+
+            '<button class="'+payCls+'" id="dpaybtn-'+m.cid+'" data-cid="'+m.cid+'" data-date="'+m.date+'" style="flex:1">'+payTxt+'</button>'+
+            '<button onclick="sumShareImage('+m.cid+',\''+m.date+'\')" title="Share order image" style="flex-shrink:0;width:40px;height:40px;border:1px solid #d1d5db;border-radius:8px;background:#fff;font-size:16px;cursor:pointer">📤</button>'+
           '</div>'+
         '</div>';  /* close .dcard */
     });
@@ -3929,6 +3932,161 @@ function sumToggleCollected(refsJson,btnEl){
   toast(newVal?'✓ Collected':'Unmarked');
 }
 
+
+/* ── truncate text with ellipsis to fit a canvas column width ── */
+function fitText(ctx,text,maxWidth){
+  if(ctx.measureText(text).width<=maxWidth) return text;
+  var t=text;
+  while(t.length>1 && ctx.measureText(t+'…').width>maxWidth){ t=t.slice(0,-1); }
+  return t+'…';
+}
+
+/* ── generate a shareable order-summary image for one customer+date,
+   then open the native share sheet (mobile) or download it (desktop) ── */
+function sumShareImage(cid,date){
+  var c=cp(cid);
+  var cname=c?c.name:'Unknown';
+  var orders=D.orders.filter(function(o){return o.cid===cid&&o.date===date;});
+  if(!orders.length){toast('No order found');return;}
+
+  var unpaidItems=[],paidItems=[];
+  orders.forEach(function(o){
+    o.items.forEach(function(it){
+      var p=sp(it.s);
+      if(!p) return;
+      var sell=it.sp!=null?it.sp:p.sell;
+      var sub=sell*it.q;
+      var row={name:p.name,qty:it.q,price:sell,sub:sub};
+      (it.itemPaid?paidItems:unpaidItems).push(row);
+    });
+  });
+  var balanceDue=unpaidItems.reduce(function(s,r){return s+r.sub;},0);
+
+  var W=720,PAD=32;
+  var headerH=100,dateRowH=48,colHeadH=38,rowH=42,bannerH=32,totalH=68,footH=52;
+  var bannerCount=(unpaidItems.length?1:0)+(paidItems.length?1:0);
+  var rowCount=unpaidItems.length+paidItems.length;
+  var H=headerH+dateRowH+colHeadH+rowCount*rowH+bannerCount*bannerH+totalH+footH;
+
+  var scale=2;
+  var canvas=document.createElement('canvas');
+  canvas.width=W*scale;canvas.height=H*scale;
+  var ctx=canvas.getContext('2d');
+  ctx.scale(scale,scale);
+  ctx.textBaseline='middle';
+
+  ctx.fillStyle='#f7f8f6';ctx.fillRect(0,0,W,H);
+
+  /* header */
+  ctx.fillStyle='#1a3a2a';ctx.fillRect(0,0,W,headerH);
+  ctx.fillStyle='#2d5a42';
+  ctx.beginPath();ctx.arc(56,50,26,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.font='700 22px -apple-system,"Segoe UI",sans-serif';
+  ctx.textAlign='left';
+  ctx.fillText('山區團購優惠組',96,50);
+
+  /* customer + date row */
+  var y=headerH+dateRowH/2;
+  ctx.fillStyle='#eef2ee';ctx.fillRect(0,headerH,W,dateRowH);
+  ctx.fillStyle='#1a1a1a';
+  ctx.font='700 17px -apple-system,"Segoe UI",sans-serif';
+  ctx.textAlign='left';
+  ctx.fillText(cname+' 的訂單',PAD,y);
+  ctx.fillStyle='#5f7d69';
+  ctx.font='600 13px -apple-system,"Segoe UI",sans-serif';
+  ctx.textAlign='right';
+  ctx.fillText(date,W-PAD,y);
+
+  /* column headers */
+  var colX={name:PAD,qty:W*0.54,price:W*0.68,status:W*0.81,sub:W-PAD};
+  y=headerH+dateRowH+colHeadH/2;
+  ctx.fillStyle='#1a3a2a';ctx.fillRect(0,headerH+dateRowH,W,colHeadH);
+  ctx.fillStyle='#fff';
+  ctx.font='700 12px -apple-system,"Segoe UI",sans-serif';
+  ctx.textAlign='left';ctx.fillText('產品',colX.name,y);
+  ctx.textAlign='center';ctx.fillText('數量',colX.qty,y);
+  ctx.textAlign='center';ctx.fillText('單價',colX.price,y);
+  ctx.textAlign='center';ctx.fillText('狀態',colX.status,y);
+  ctx.textAlign='right';ctx.fillText('小計',colX.sub,y);
+
+  var curY=headerH+dateRowH+colHeadH;
+
+  function drawBanner(text,bg,fg){
+    ctx.fillStyle=bg;ctx.fillRect(0,curY,W,bannerH);
+    ctx.fillStyle=fg;
+    ctx.font='700 12px -apple-system,"Segoe UI",sans-serif';
+    ctx.textAlign='left';
+    ctx.fillText(text,PAD,curY+bannerH/2);
+    curY+=bannerH;
+  }
+  function drawRow(r,paid,idx){
+    ctx.fillStyle=idx%2===0?'#ffffff':'#fbfbfa';
+    ctx.fillRect(0,curY,W,rowH);
+    var ry=curY+rowH/2;
+    ctx.font='600 13px -apple-system,"Segoe UI",sans-serif';
+    ctx.fillStyle='#1a1a1a';
+    ctx.textAlign='left';
+    ctx.fillText(fitText(ctx,r.name,colX.qty-colX.name-16),colX.name,ry);
+    ctx.textAlign='center';ctx.fillText(String(parseFloat(r.qty.toFixed(2))),colX.qty,ry);
+    ctx.textAlign='center';ctx.fillText('$'+r.price.toFixed(2),colX.price,ry);
+    ctx.font='700 11px -apple-system,"Segoe UI",sans-serif';
+    ctx.fillStyle=paid?'#16a34a':'#dc2626';
+    ctx.textAlign='center';ctx.fillText(paid?'已付':'未付',colX.status,ry);
+    ctx.fillStyle='#1a1a1a';
+    ctx.font='700 13px -apple-system,"Segoe UI",sans-serif';
+    ctx.textAlign='right';ctx.fillText('$'+r.sub.toFixed(2),colX.sub,ry);
+    curY+=rowH;
+  }
+
+  if(unpaidItems.length){
+    drawBanner('⬇ 未付款','#fff3e0','#c2410c');
+    unpaidItems.forEach(function(r,i){drawRow(r,false,i);});
+  }
+  if(paidItems.length){
+    drawBanner('✓ 已付款','#f0fdf4','#15803d');
+    paidItems.forEach(function(r,i){drawRow(r,true,i);});
+  }
+
+  /* balance due total */
+  ctx.fillStyle='#1a3a2a';ctx.fillRect(0,curY,W,totalH);
+  var ty=curY+totalH/2;
+  ctx.fillStyle='#cfe3d6';
+  ctx.font='600 13px -apple-system,"Segoe UI",sans-serif';
+  ctx.textAlign='left';
+  ctx.fillText('今次應付 Balance Due',PAD,ty);
+  ctx.fillStyle='#fff';
+  ctx.font='700 24px -apple-system,"Segoe UI",sans-serif';
+  ctx.textAlign='right';
+  ctx.fillText('A$'+balanceDue.toFixed(2),W-PAD,ty);
+  curY+=totalH;
+
+  /* footer */
+  ctx.fillStyle='#eef2ee';ctx.fillRect(0,curY,W,footH);
+  ctx.fillStyle='#5f7d69';
+  ctx.font='600 12px -apple-system,"Segoe UI",sans-serif';
+  ctx.textAlign='center';
+  ctx.fillText('如有問題請WhatsApp群組留言 · 多謝支持 🙏',W/2,curY+footH/2);
+
+  canvas.toBlob(function(blob){
+    if(!blob){toast('Could not generate image');return;}
+    var safeName=cname.replace(/[^\w\u4e00-\u9fff]+/g,'')||'order';
+    var fileName='order-'+safeName+'-'+date+'.png';
+    var file=null;
+    try{ file=new File([blob],fileName,{type:'image/png'}); }catch(e){}
+    if(file && navigator.canShare && navigator.canShare({files:[file]})){
+      navigator.share({files:[file],title:cname+' 的訂單'}).catch(function(){});
+    } else {
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement('a');
+      a.href=url;a.download=fileName;
+      document.body.appendChild(a);a.click();
+      document.body.removeChild(a);
+      setTimeout(function(){URL.revokeObjectURL(url);},2000);
+      toast('✓ Order image saved');
+    }
+  },'image/png');
+}
 
 function exportSummarySheets(){
   if(!GD.accessToken){toast('Connect Google Drive first.');return;}
