@@ -3727,7 +3727,18 @@ function renderSummary(){
 }
 
 function exportSummaryExcel(){
-  if(typeof ExcelJS==='undefined'){toast('Excel library loading, please try again in 5 seconds.');return}
+  if(typeof ExcelJS==='undefined'){
+    if(!window._exceljsLoading){
+      window._exceljsLoading=true;
+      var s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+      s.onload=function(){window._exceljsLoading=false;};
+      s.onerror=function(){window._exceljsLoading=false;toast('⚠ Could not load Excel library — check your internet connection.');};
+      document.head.appendChild(s);
+    }
+    toast('Excel library loading, please try again in 5 seconds.');
+    return;
+  }
   var ords=getSummaryOrders();
   if(!ords.length){toast('No orders to export.');return}
 
