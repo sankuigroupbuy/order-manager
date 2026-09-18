@@ -3847,7 +3847,7 @@ function exportSummaryExcel(){
   var mergedMap={};
   ords.forEach(function(o){
     var key=o.cid+'|'+o.date;
-    if(!mergedMap[key]) mergedMap[key]={cid:o.cid,date:o.date,items:[]};
+    if(!mergedMap[key]) mergedMap[key]={cid:o.cid,date:o.date,items:[],loc:o.loc||''};
     o.items.forEach(function(it){
       var ex=mergedMap[key].items.find(function(x){return x.s===it.s&&(x.sp||0)===(it.sp||0)&&x.itemStatus===o.status;});
       if(ex){ex.q=parseFloat((ex.q+it.q).toFixed(2));if(it.collected)ex.collected=true;}
@@ -3862,50 +3862,85 @@ function exportSummaryExcel(){
   var wb=new ExcelJS.Workbook();
   wb.creator='Hills Sweets NMC';
 
-  /* ── style helpers ── */
-  var BLU={type:'pattern',pattern:'solid',fgColor:{argb:'FFBDD7EE'}};
-  var NAVY={type:'pattern',pattern:'solid',fgColor:{argb:'FF1E3A5F'}};
-  var COLL={type:'pattern',pattern:'solid',fgColor:{argb:'FFC6EFCE'}};
-  var NCOLL={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFC7CE'}};
-  function styleHeader(row){
-    row.eachCell(function(cell){
-      cell.font={bold:true,size:11};
-      cell.fill=BLU;
-      cell.alignment={horizontal:'center',vertical:'middle'};
-      cell.border={bottom:{style:'thin',color:{argb:'FF9DC3E6'}}};
-    });
-    row.height=18;
+  /* ── style constants (approved design) ── */
+  var BRANDC='FF1A3A2A',CUST_BAND='FFCFE8B8',TOTAL_CHIP='FFE3EEDC',WHITEC='FFFFFFFF';
+  var LOC_COLORS={
+    'Castle Towers':{bg:'FFE6F1FB',fg:'FF0C447C'},
+    'Epping':{bg:'FFFAEEDA',fg:'FF854F0B'}
+  };
+  function locColorFor(loc){return LOC_COLORS[loc]||{bg:'FFF1EFE8',fg:'FF5F5E5A'};}
+  function paidBadgeFor(count,total){
+    if(count===total) return {label:'🟢 Paid',bg:'FFC0DD97',fg:'FF27500A'};
+    if(count===0) return {label:'🔴 Unpaid',bg:'FFF7C1C1',fg:'FF791F1F'};
+    return {label:'🟠 Partial '+count+'/'+total,bg:'FFFAC775',fg:'FF854F0B'};
   }
-  function styleTotal(row,cname,blockTotal){
-    row.eachCell(function(cell,cn){
-      cell.fill=BLU;
-      if(cn===1){cell.font={bold:true,size:11};cell.value=cname+' Total';cell.alignment={horizontal:'left'};}
-      if(cn===5){cell.font={bold:true,size:11};cell.value=parseFloat(blockTotal.toFixed(2));cell.numFmt='0.00';}
-    });
-    row.height=16;
-  }
-  function styleGrand(row){
-    row.eachCell(function(cell){
-      cell.font={bold:true,color:{argb:'FFFFFFFF'},size:12};
-      cell.fill=NAVY;
-      cell.alignment={vertical:'middle'};
-    });
-    row.height=20;
+  function collBadgeFor(count,total){
+    if(count===total) return {label:'✅ Collected',bg:'FFC0DD97',fg:'FF27500A'};
+    if(count===0) return {label:'📦 Not collected',bg:'FFFAC775',fg:'FF854F0B'};
+    return {label:'📦 Partial '+count+'/'+total,bg:'FFFAC775',fg:'FF854F0B'};
   }
 
-  /* ── Sheet 1: Order Summary ── */
-  var ws1=wb.addWorksheet('Order Summary');
+  /* ── Sheet 1: Order Summary (approved report design) ── */
+  var ws1=wb.addWorksheet('Order Summary',{views:[{state:'frozen',ySplit:3,showGridLines:false}]});
   ws1.columns=[
-    {width:20},{width:30},{width:14},{width:7},{width:14},{width:15},{width:12},{width:10}
+    {width:4},{width:17},{width:34},{width:13},{width:7},
+    {width:13},{width:17},{width:18},{width:16},{width:13}
   ];
-  var HDR=['Order by','Product','Unit price (A$)','Qty','Subtotal (A$)','Collect Y/N','Order date','Status'];
+
+  var exportDateLabel=document.getElementById('sum-date').value||'All dates';
+  ws1.mergeCells('A1:F1');
+  var titleCell=ws1.getCell('A1');
+  titleCell.value='山區團購優惠組   Order Summary';
+  titleCell.font={bold:true,size:22,color:{argb:WHITEC}};
+  titleCell.fill={type:'pattern',pattern:'solid',fgColor:{argb:BRANDC}};
+  titleCell.alignment={vertical:'middle',indent:1};
+  ws1.mergeCells('G1:J1');
+  var dateCell=ws1.getCell('G1');
+  dateCell.value='📅  '+exportDateLabel;
+  dateCell.font={bold:true,size:14,color:{argb:WHITEC}};
+  dateCell.fill={type:'pattern',pattern:'solid',fgColor:{argb:BRANDC}};
+  dateCell.alignment={vertical:'middle',horizontal:'right',indent:1};
+  ws1.getRow(1).height=46;
+
+  ws1.addRow([]);ws1.getRow(2).height=6;
+
+  var HDR=['#','Order by','Product','Unit price (A$)','Qty','Subtotal (A$)','Paid','Collected','Pickup','Order date'];
+  var hdrRow=ws1.addRow(HDR);
+  hdrRow.eachCell(function(cell){
+    cell.font={bold:true,size:13,color:{argb:WHITEC}};
+    cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:BRANDC}};
+    cell.alignment={horizontal:'center',vertical:'middle'};
+  });
+  hdrRow.height=28;
+
   var grandTotal=0,prodMap={};
 
   merged.forEach(function(m,bi){
     var c=cp(m.cid),cname=c?c.name:'Unknown',blockTotal=0;
+    var paidCount=m.items.filter(function(it){return it.itemStatus==='paid';}).length;
+    var collCount=m.items.filter(function(it){return it.collected;}).length;
+    var paidBadge=paidBadgeFor(paidCount,m.items.length);
+    var collBadge=collBadgeFor(collCount,m.items.length);
+    var lc=locColorFor(m.loc);
 
-    /* header row */
-    styleHeader(ws1.addRow(HDR));
+    /* customer header row */
+    var custRow=ws1.addRow([bi+1,cname,'','','','',paidBadge.label,collBadge.label,(m.loc?('📍 '+m.loc):'Not set'),'']);
+    custRow.eachCell(function(cell){cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:CUST_BAND}};});
+    custRow.getCell(1).font={bold:true,size:13,color:{argb:WHITEC}};
+    custRow.getCell(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:BRANDC}};
+    custRow.getCell(1).alignment={horizontal:'center',vertical:'middle'};
+    custRow.getCell(2).font={bold:true,size:15,color:{argb:'FF1A3A2A'}};
+    custRow.getCell(2).alignment={vertical:'middle'};
+    custRow.getCell(7).font={bold:true,size:12,color:{argb:paidBadge.fg}};
+    custRow.getCell(7).fill={type:'pattern',pattern:'solid',fgColor:{argb:paidBadge.bg}};
+    custRow.getCell(7).alignment={horizontal:'center',vertical:'middle'};
+    custRow.getCell(8).font={bold:true,size:12,color:{argb:collBadge.fg}};
+    custRow.getCell(8).fill={type:'pattern',pattern:'solid',fgColor:{argb:collBadge.bg}};
+    custRow.getCell(8).alignment={horizontal:'center',vertical:'middle'};
+    custRow.getCell(9).font={bold:true,size:13,color:{argb:lc.fg}};
+    custRow.getCell(9).fill={type:'pattern',pattern:'solid',fgColor:{argb:lc.bg}};
+    custRow.getCell(9).alignment={horizontal:'center',vertical:'middle'};
+    custRow.height=30;
 
     /* item rows */
     m.items.forEach(function(it){
@@ -3913,25 +3948,21 @@ function exportSummaryExcel(){
       var sell=it.sp!=null?it.sp:p.sell;
       var sub=parseFloat((sell*it.q).toFixed(2));
       blockTotal+=sub;
+      var isPaid=it.itemStatus==='paid';
       var isColl=!!it.collected;
-      var row=ws1.addRow([cname,p.name,parseFloat(sell.toFixed(2)),parseFloat(it.q.toFixed(2)),sub,isColl?'Collected':'Not collected',m.date,it.itemStatus||'unpaid']);
-      /* number formats */
-      row.getCell(3).numFmt='0.00';
-      row.getCell(4).numFmt='0.00';
-      row.getCell(5).numFmt='0.00';
-      /* collected column F styling */
-      var fCell=row.getCell(6);
-      if(isColl){
-        fCell.font={bold:true,color:{argb:'FF276221'},size:11};
-        fCell.fill=COLL;
-        fCell.alignment={horizontal:'center'};
-        /* tint whole row */
-        row.eachCell(function(cell,cn){if(cn!==6) cell.fill=COLL;});
-      } else {
-        fCell.font={bold:true,color:{argb:'FF9C0006'},size:11};
-        fCell.fill=NCOLL;
-        fCell.alignment={horizontal:'center'};
-      }
+      var row=ws1.addRow(['','',p.name,parseFloat(sell.toFixed(2)),parseFloat(it.q.toFixed(2)),sub,
+        isPaid?'✓':'✗',isColl?'✓':'✗','',m.date]);
+      row.getCell(3).font={size:12};
+      row.getCell(4).numFmt='"$"#,##0.00';row.getCell(4).font={size:12};
+      row.getCell(5).numFmt='0.00';row.getCell(5).font={size:12};row.getCell(5).alignment={horizontal:'center'};
+      row.getCell(6).numFmt='"$"#,##0.00';row.getCell(6).font={size:12};
+      row.getCell(7).font={bold:true,size:15,color:{argb:isPaid?'FF27500A':'FF791F1F'}};
+      row.getCell(7).alignment={horizontal:'center'};
+      row.getCell(8).font={bold:true,size:15,color:{argb:isColl?'FF27500A':'FF854F0B'}};
+      row.getCell(8).alignment={horizontal:'center'};
+      row.getCell(10).font={size:11,color:{argb:'FF888888'}};
+      row.height=22;
+
       /* accumulate sheet 2 */
       if(!prodMap[it.s]) prodMap[it.s]={name:p.name,qty:0,revenue:0,cat:p.cat||'Others'};
       prodMap[it.s].qty=parseFloat((prodMap[it.s].qty+it.q).toFixed(2));
@@ -3940,27 +3971,39 @@ function exportSummaryExcel(){
 
     grandTotal+=blockTotal;
 
-    /* customer total row */
-    var totalRow=ws1.addRow([cname+' Total','','','',parseFloat(blockTotal.toFixed(2)),'','','']);
-    styleTotal(totalRow,cname,blockTotal);
+    /* customer total row — bold chip-style subtotal */
+    var totalRow=ws1.addRow(['',cname+' Total','','','',parseFloat(blockTotal.toFixed(2)),'','','','']);
+    totalRow.eachCell(function(cell){cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:CUST_BAND}};});
+    totalRow.getCell(2).font={bold:true,size:13,color:{argb:'FF1A3A2A'}};
+    totalRow.getCell(6).font={bold:true,size:15,color:{argb:'FF1A3A2A'}};
+    totalRow.getCell(6).fill={type:'pattern',pattern:'solid',fgColor:{argb:TOTAL_CHIP}};
+    totalRow.getCell(6).numFmt='"$"#,##0.00';
+    totalRow.getCell(6).alignment={horizontal:'center'};
+    totalRow.height=24;
 
-    /* blank separator */
-    if(bi<merged.length-1) ws1.addRow([]);
+    ws1.addRow([]).height=6;
   });
 
-  /* grand total */
   ws1.addRow([]);
-  var grandRow=ws1.addRow(['GRAND TOTAL','','','',parseFloat(grandTotal.toFixed(2)),'','','']);
-  grandRow.getCell(5).numFmt='0.00';
-  styleGrand(grandRow);
+  var grandRow=ws1.addRow(['','GRAND TOTAL','','','',parseFloat(grandTotal.toFixed(2)),'','','','']);
+  grandRow.eachCell(function(cell){cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:BRANDC}};});
+  grandRow.getCell(2).font={bold:true,size:16,color:{argb:WHITEC}};
+  grandRow.getCell(6).font={bold:true,size:18,color:{argb:WHITEC}};
+  grandRow.getCell(6).numFmt='"$"#,##0.00';
+  grandRow.getCell(6).alignment={horizontal:'center'};
+  grandRow.height=32;
 
-  /* freeze top row, auto-filter */
-  ws1.views=[{state:'frozen',ySplit:1}];
-
-  /* ── Sheet 2: Products by Qty ── */
+  /* ── Sheet 2: Products by Qty (unchanged) ── */
   var ws2=wb.addWorksheet('Products by Qty');
   ws2.columns=[{width:32},{width:16},{width:12},{width:18}];
-  styleHeader(ws2.addRow(['Product','Category','Total Qty','Total Revenue (A$)']));
+  var hdr2=ws2.addRow(['Product','Category','Total Qty','Total Revenue (A$)']);
+  hdr2.eachCell(function(cell){
+    cell.font={bold:true,size:11};
+    cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFBDD7EE'}};
+    cell.alignment={horizontal:'center',vertical:'middle'};
+    cell.border={bottom:{style:'thin',color:{argb:'FF9DC3E6'}}};
+  });
+  hdr2.height=18;
 
   var prodList=Object.values(prodMap).sort(function(a,b){return b.qty-a.qty;});
   var tQty=0,tRev=0;
@@ -3972,7 +4015,12 @@ function exportSummaryExcel(){
   });
   var gRow2=ws2.addRow(['TOTAL','',tQty,tRev]);
   gRow2.getCell(3).numFmt='0.00';gRow2.getCell(4).numFmt='0.00';
-  styleGrand(gRow2);
+  gRow2.eachCell(function(cell){
+    cell.font={bold:true,color:{argb:WHITEC},size:12};
+    cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:BRANDC}};
+    cell.alignment={vertical:'middle'};
+  });
+  gRow2.height=20;
 
   /* ── write file ── */
   var today=new Date().toISOString().split('T')[0];
