@@ -921,6 +921,13 @@ textarea{resize:vertical;min-height:60px}
         <label>Filter by date</label>
         <input type="date" id="sum-date" onchange="renderSummary()" style="width:160px">
       </div>
+      <div>
+        <label>Receipt language</label>
+        <select id="sum-receipt-lang" onchange="localStorage.setItem('om_receipt_lang',this.value)" style="width:120px">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+        </select>
+      </div>
       <button class="btn btn-o" onclick="document.getElementById('sum-date').value='';renderSummary()" style="height:36px;align-self:flex-end">Clear date</button>
       <button class="btn btn-p" onclick="exportSummaryExcel()" style="height:36px;align-self:flex-end">&#8595; Export to Excel</button>
       <button class="btn btn-o" onclick="exportSummarySheets()" style="height:36px;align-self:flex-end;display:flex;align-items:center;gap:6px">
@@ -936,6 +943,7 @@ textarea{resize:vertical;min-height:60px}
       <div class="sum-chip" onclick="sumMobFilter('unpaid',this)">Unpaid</div>
       <div class="sum-chip" onclick="sumMobFilter('all',this)">All</div>
       <div class="sum-chip" onclick="sumMobFilter('paid',this)">Paid</div>
+      <div class="sum-chip" id="sum-lang-chip" onclick="sumToggleLang(this)">🌐 中文</div>
     </div>
     <!-- MOBILE date chips — populated by JS, hidden on desktop -->
     <div id="sum-date-chips" style="display:none"></div>
@@ -3430,6 +3438,11 @@ function updateSumProgress(ords){
 }
 
 function renderSummary(){
+  var langSel=document.getElementById('sum-receipt-lang');
+  var curLang=localStorage.getItem('om_receipt_lang')||'zh';
+  if(langSel) langSel.value=curLang;
+  var langChip=document.getElementById('sum-lang-chip');
+  if(langChip) langChip.textContent=curLang==='en'?'🌐 EN':'🌐 中文';
   var isMob=window.innerWidth<=768;
   if(isMob){
     var today=new Date().toISOString().split('T')[0];
@@ -3949,6 +3962,15 @@ function sumToggleCollected(refsJson,btnEl){
 }
 
 
+function sumToggleLang(el){
+  var cur=localStorage.getItem('om_receipt_lang')||'zh';
+  var next=cur==='zh'?'en':'zh';
+  localStorage.setItem('om_receipt_lang',next);
+  el.textContent=next==='en'?'🌐 EN':'🌐 中文';
+  var langSel=document.getElementById('sum-receipt-lang');
+  if(langSel) langSel.value=next;
+}
+
 /* ── truncate text with ellipsis to fit a canvas column width ── */
 function fitText(ctx,text,maxWidth){
   if(ctx.measureText(text).width<=maxWidth) return text;
@@ -3960,6 +3982,22 @@ function fitText(ctx,text,maxWidth){
 /* ── generate a shareable order-summary image for one customer+date,
    then open the native share sheet (mobile) or download it (desktop) ── */
 function sumShareImage(cid,date){
+  var lang=localStorage.getItem('om_receipt_lang')||'zh';
+  var t=lang==='en'?{
+    orderOf:function(n){return n+"'s order";},
+    unpaidBanner:'Unpaid',paidBanner:'Paid',
+    colProduct:'Product',colQty:'Qty',colPrice:'Price',colStatus:'Status',colSub:'Subtotal',
+    statusUnpaid:'Unpaid',statusPaid:'Paid',
+    balanceDue:'Balance Due',
+    footer:'Questions? Message the WhatsApp group · Thank you! 🙏'
+  }:{
+    orderOf:function(n){return n+' 的訂單';},
+    unpaidBanner:'⬇ 未付款',paidBanner:'✓ 已付款',
+    colProduct:'產品',colQty:'數量',colPrice:'單價',colStatus:'狀態',colSub:'小計',
+    statusUnpaid:'未付',statusPaid:'已付',
+    balanceDue:'今次應付 Balance Due',
+    footer:'如有問題請WhatsApp群組留言 · 多謝支持 🙏'
+  };
   var c=cp(cid);
   var cname=c?c.name:'Unknown';
   var orders=D.orders.filter(function(o){return o.cid===cid&&o.date===date;});
@@ -4000,7 +4038,7 @@ function sumShareImage(cid,date){
   ctx.fillStyle='#fff';
   ctx.font='700 22px -apple-system,"Segoe UI",sans-serif';
   ctx.textAlign='left';
-  ctx.fillText('山區團購優惠組',96,50);
+  ctx.fillText(lang==='en'?'Hills Sweets NMC':'山區團購優惠組',96,50);
 
   /* customer + date row */
   var y=headerH+dateRowH/2;
@@ -4008,7 +4046,7 @@ function sumShareImage(cid,date){
   ctx.fillStyle='#1a1a1a';
   ctx.font='700 17px -apple-system,"Segoe UI",sans-serif';
   ctx.textAlign='left';
-  ctx.fillText(cname+' 的訂單',PAD,y);
+  ctx.fillText(t.orderOf(cname),PAD,y);
   ctx.fillStyle='#5f7d69';
   ctx.font='600 13px -apple-system,"Segoe UI",sans-serif';
   ctx.textAlign='right';
@@ -4020,11 +4058,11 @@ function sumShareImage(cid,date){
   ctx.fillStyle='#1a3a2a';ctx.fillRect(0,headerH+dateRowH,W,colHeadH);
   ctx.fillStyle='#fff';
   ctx.font='700 12px -apple-system,"Segoe UI",sans-serif';
-  ctx.textAlign='left';ctx.fillText('產品',colX.name,y);
-  ctx.textAlign='center';ctx.fillText('數量',colX.qty,y);
-  ctx.textAlign='center';ctx.fillText('單價',colX.price,y);
-  ctx.textAlign='center';ctx.fillText('狀態',colX.status,y);
-  ctx.textAlign='right';ctx.fillText('小計',colX.sub,y);
+  ctx.textAlign='left';ctx.fillText(t.colProduct,colX.name,y);
+  ctx.textAlign='center';ctx.fillText(t.colQty,colX.qty,y);
+  ctx.textAlign='center';ctx.fillText(t.colPrice,colX.price,y);
+  ctx.textAlign='center';ctx.fillText(t.colStatus,colX.status,y);
+  ctx.textAlign='right';ctx.fillText(t.colSub,colX.sub,y);
 
   var curY=headerH+dateRowH+colHeadH;
 
@@ -4048,7 +4086,7 @@ function sumShareImage(cid,date){
     ctx.textAlign='center';ctx.fillText('$'+r.price.toFixed(2),colX.price,ry);
     ctx.font='700 11px -apple-system,"Segoe UI",sans-serif';
     ctx.fillStyle=paid?'#16a34a':'#dc2626';
-    ctx.textAlign='center';ctx.fillText(paid?'已付':'未付',colX.status,ry);
+    ctx.textAlign='center';ctx.fillText(paid?t.statusPaid:t.statusUnpaid,colX.status,ry);
     ctx.fillStyle='#1a1a1a';
     ctx.font='700 13px -apple-system,"Segoe UI",sans-serif';
     ctx.textAlign='right';ctx.fillText('$'+r.sub.toFixed(2),colX.sub,ry);
@@ -4056,11 +4094,11 @@ function sumShareImage(cid,date){
   }
 
   if(unpaidItems.length){
-    drawBanner('⬇ 未付款','#fff3e0','#c2410c');
+    drawBanner(t.unpaidBanner,'#fff3e0','#c2410c');
     unpaidItems.forEach(function(r,i){drawRow(r,false,i);});
   }
   if(paidItems.length){
-    drawBanner('✓ 已付款','#f0fdf4','#15803d');
+    drawBanner(t.paidBanner,'#f0fdf4','#15803d');
     paidItems.forEach(function(r,i){drawRow(r,true,i);});
   }
 
@@ -4070,7 +4108,7 @@ function sumShareImage(cid,date){
   ctx.fillStyle='#cfe3d6';
   ctx.font='600 13px -apple-system,"Segoe UI",sans-serif';
   ctx.textAlign='left';
-  ctx.fillText('今次應付 Balance Due',PAD,ty);
+  ctx.fillText(t.balanceDue,PAD,ty);
   ctx.fillStyle='#fff';
   ctx.font='700 24px -apple-system,"Segoe UI",sans-serif';
   ctx.textAlign='right';
@@ -4082,7 +4120,7 @@ function sumShareImage(cid,date){
   ctx.fillStyle='#5f7d69';
   ctx.font='600 12px -apple-system,"Segoe UI",sans-serif';
   ctx.textAlign='center';
-  ctx.fillText('如有問題請WhatsApp群組留言 · 多謝支持 🙏',W/2,curY+footH/2);
+  ctx.fillText(t.footer,W/2,curY+footH/2);
 
   canvas.toBlob(function(blob){
     if(!blob){toast('Could not generate image');return;}
@@ -4091,7 +4129,7 @@ function sumShareImage(cid,date){
     var file=null;
     try{ file=new File([blob],fileName,{type:'image/png'}); }catch(e){}
     if(file && navigator.canShare && navigator.canShare({files:[file]})){
-      navigator.share({files:[file],title:cname+' 的訂單'}).catch(function(){});
+      navigator.share({files:[file],title:t.orderOf(cname)}).catch(function(){});
     } else {
       var url=URL.createObjectURL(blob);
       var a=document.createElement('a');
