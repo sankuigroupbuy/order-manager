@@ -3017,6 +3017,7 @@ function pfFields(c){
 function editProfile(cid){
   var c=cp(cid);if(!c)return;
   document.getElementById('pf-'+cid).innerHTML=
+    '<div style="margin-bottom:8px"><label>Name</label><input id="ep-name" value="'+esc(c.name||'')+'"></div>'+
     '<div style="margin-bottom:8px"><label>Phone</label><input id="ep-phone" value="'+esc(c.phone||'')+'"></div>'+
     '<div style="margin-bottom:8px"><label>Address</label><textarea id="ep-addr" rows="3">'+esc(c.address||'')+'</textarea></div>'+
     '<div style="margin-bottom:10px"><label>Notes</label><input id="ep-notes" value="'+esc(c.notes||'')+'"></div>'+
@@ -3024,9 +3025,13 @@ function editProfile(cid){
       '<button class="btn btn-p btn-sm" onclick="saveProfile('+cid+')">Save changes</button>'+
       '<button class="btn btn-o btn-sm" onclick="showProfile('+cid+')">Cancel</button>'+
     '</div>';
+  setTimeout(function(){document.getElementById('ep-name').focus()},50);
 }
 function saveProfile(cid){
   var c=cp(cid);if(!c)return;
+  var newName=document.getElementById('ep-name').value.trim();
+  if(!newName){toast('Name cannot be empty.');return}
+  c.name=newName;
   c.phone=document.getElementById('ep-phone').value.trim();
   c.address=document.getElementById('ep-addr').value.trim();
   c.notes=document.getElementById('ep-notes').value.trim();
