@@ -738,10 +738,11 @@ textarea{resize:vertical;min-height:60px}
     <div class="sec-label">Add new order</div>
     <div class="card cp">
       <div class="r3">
-        <div><label>Customer</label><select id="o-cust"><option value="">Select...</option></select></div>
+        <div><label>Customer</label><select id="o-cust" onchange="oCustChanged()"><option value="">Select...</option></select></div>
         <div><label>Date</label><input type="date" id="o-date"></div>
         <div><label>Status</label><select id="o-status"><option value="unpaid">Unpaid</option><option value="partial">Partial</option><option value="paid">Paid</option></select></div>
       </div>
+      <div style="max-width:220px;margin-bottom:12px"><label>Pickup location</label><select id="o-loc"><option value="">Not set</option></select></div>
       <div class="sec-label" style="margin-top:4px">Items</div>
       <div id="o-lines"></div>
       <button class="btn btn-o btn-sm" onclick="addLine()" style="margin-bottom:14px">+ Add item</button>
@@ -922,6 +923,12 @@ textarea{resize:vertical;min-height:60px}
         <input type="date" id="sum-date" onchange="renderSummary()" style="width:160px">
       </div>
       <div>
+        <label>Filter by location</label>
+        <select id="sum-loc" onchange="renderSummary()" style="width:150px">
+          <option value="all" selected>All spots</option>
+        </select>
+      </div>
+      <div>
         <label>Receipt language</label>
         <select id="sum-receipt-lang" onchange="localStorage.setItem('om_receipt_lang',this.value)" style="width:120px">
           <option value="zh">中文</option>
@@ -936,6 +943,7 @@ textarea{resize:vertical;min-height:60px}
       </button>
       <button class="btn btn-o" onclick="window.print()" style="height:36px;align-self:flex-end">&#128438; Print</button>
     </div>
+    <div id="sum-loc-chips" style="margin-bottom:16px;font-size:11px"></div>
 
     <!-- MOBILE filter chips (shown only on mobile via CSS) -->
     <div id="sum-controls-mobile" style="display:none">
@@ -1376,6 +1384,44 @@ var dvView='list';
 function rm(n){return 'A$'+parseFloat(n).toFixed(2)}
 function sp(id){return D.stock.find(function(x){return x.id===id})}
 function cp(id){return D.customers.find(function(x){return x.id===id})}
+
+/* ── pickup locations: editable list, shared across order entry,
+   customer defaults, and Order Summary's filter ── */
+var PICKUP_LOC_KEY='om_pickup_locs';
+function getPickupLocs(){
+  try{
+    var v=JSON.parse(localStorage.getItem(PICKUP_LOC_KEY));
+    if(Array.isArray(v)&&v.length) return v;
+  }catch(e){}
+  return['Castle Towers','Epping'];
+}
+function savePickupLocs(arr){localStorage.setItem(PICKUP_LOC_KEY,JSON.stringify(arr));}
+function pickupLocOptionsHtml(selected){
+  return getPickupLocs().map(function(l){
+    return '<option value="'+esc(l)+'"'+(l===selected?' selected':'')+'>'+esc(l)+'</option>';
+  }).join('');
+}
+function addPickupLoc(){
+  var v=prompt('New pickup location name:');
+  if(!v) return;
+  v=v.trim();if(!v) return;
+  var locs=getPickupLocs();
+  if(locs.indexOf(v)>=0){toast('That location already exists.');return;}
+  locs.push(v);savePickupLocs(locs);
+  toast('✓ Added '+v);
+  renderSummary();
+}
+function removePickupLoc(name){
+  if(!confirm('Remove "'+name+'" from the pickup location list?\n\nExisting orders already set to this location will keep showing it — this only removes it from the dropdown for future orders.')) return;
+  savePickupLocs(getPickupLocs().filter(function(l){return l!==name;}));
+  renderSummary();
+}
+function pickupLocChipsHtml(){
+  return getPickupLocs().map(function(l){
+    return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;background:#eef2ee;border-radius:99px;margin-right:4px">'+esc(l)+
+      '<span onclick="removePickupLoc(\''+esc(l).replace(/'/g,"\\'")+'\')" style="cursor:pointer;color:#b91c1c;font-weight:700">×</span></span>';
+  }).join('')+'<span onclick="addPickupLoc()" style="cursor:pointer;font-size:11px;color:#1a3a2a;font-weight:700;text-decoration:underline">+ Add spot</span>';
+}
 function oSell(o){return o.items.reduce(function(s,i){if(i.deducted) return s;var price=i.sp!=null?i.sp:(sp(i.s)?sp(i.s).sell:0);return s+price*i.q},0)}
 function oCost(o){return o.items.reduce(function(s,i){var price=i.cp!=null?i.cp:(sp(i.s)?sp(i.s).cost:0);return s+price*i.q},0)}
 function ini(n){return n.split(' ').slice(0,2).map(function(w){return w[0]}).join('').toUpperCase()}
@@ -1934,8 +1980,17 @@ function delOrd(id){
 function popCust(){
   var sorted=D.customers.slice().sort(function(a,b){return a.name.localeCompare(b.name);});
   document.getElementById('o-cust').innerHTML='<option value="">Select...</option>'+sorted.map(function(c){return'<option value="'+c.id+'">'+esc(c.name)+'</option>'}).join('');
+  var locSel=document.getElementById('o-loc');
+  if(locSel) locSel.innerHTML='<option value="">Not set</option>'+pickupLocOptionsHtml();
 }
-function initOForm(){oLines=[{s:'',q:1}];document.getElementById('o-date').value=new Date().toISOString().split('T')[0];renderOL();document.getElementById('o-msg').textContent=''}
+function oCustChanged(){
+  var cid=parseInt(document.getElementById('o-cust').value);
+  var c=cp(cid);
+  var locSel=document.getElementById('o-loc');
+  if(!locSel) return;
+  locSel.value=(c&&c.pickupLoc)?c.pickupLoc:'';
+}
+function initOForm(){oLines=[{s:'',q:1}];document.getElementById('o-date').value=new Date().toISOString().split('T')[0];document.getElementById('o-loc').value='';renderOL();document.getElementById('o-msg').textContent=''}
 function addLine(){oLines.push({s:'',q:1});renderOL()}
 function remLine(i){oLines.splice(i,1);renderOL()}
 function updLine(i,f,v){oLines[i][f]=f==='q'?Math.max(0.01,parseFloat(v)||0.01):parseInt(v);renderOL()}
@@ -1971,7 +2026,7 @@ function saveOrder(){
   });
   var msg=document.getElementById('o-msg');
   if(!cid||!date||!items.length){msg.textContent='Please fill customer, date and at least one item.';msg.style.color='#dc2626';return}
-  D.orders.push({id:D.nid++,cid:cid,date:date,items:items,status:status});
+  D.orders.push({id:D.nid++,cid:cid,date:date,items:items,status:status,loc:document.getElementById('o-loc').value||''});
   saveData();
   msg.textContent='Order saved!';msg.style.color='#16a34a';
   renderIntM();renderInt();
@@ -2652,7 +2707,7 @@ function confirmImport(){
       return{s:newS.id,q:qty,sp:price,cp:newS.cost};
     });
 
-    D.orders.push({id:D.nid++,cid:cid,date:date,items:items,status:status});
+    D.orders.push({id:D.nid++,cid:cid,date:date,items:items,status:status,loc:(cp(cid)||{}).pickupLoc||''});
     created++;
   });
 
@@ -3019,6 +3074,7 @@ function applyBulkDateChange(cid,orderIdsStr){
 function pfFields(c){
   return'<div class="pf"><span class="pfl">Phone</span><span class="pfv">'+(c.phone||'<span style="color:#aaa">Not set</span>')+'</span></div>'+
     '<div class="pf"><span class="pfl">Address</span><span class="pfv">'+(c.address?esc(c.address):'<span style="color:#aaa">Not set</span>')+'</span></div>'+
+    '<div class="pf"><span class="pfl">Usual pickup spot</span><span class="pfv">'+(c.pickupLoc?esc(c.pickupLoc):'<span style="color:#aaa">Not set</span>')+'</span></div>'+
     '<div class="pf"><span class="pfl">Notes</span><span class="pfv" style="font-style:italic;color:#555">'+(c.notes?esc(c.notes):'<span style="color:#aaa">—</span>')+'</span></div>'+
     '<div class="pf"><span class="pfl">Joined</span><span class="pfv">'+(c.joined||'—')+'</span></div>';
 }
@@ -3028,6 +3084,7 @@ function editProfile(cid){
     '<div style="margin-bottom:8px"><label>Name</label><input id="ep-name" value="'+esc(c.name||'')+'"></div>'+
     '<div style="margin-bottom:8px"><label>Phone</label><input id="ep-phone" value="'+esc(c.phone||'')+'"></div>'+
     '<div style="margin-bottom:8px"><label>Address</label><textarea id="ep-addr" rows="3">'+esc(c.address||'')+'</textarea></div>'+
+    '<div style="margin-bottom:8px"><label>Usual pickup spot</label><select id="ep-loc"><option value="">Not set</option>'+pickupLocOptionsHtml(c.pickupLoc)+'</select></div>'+
     '<div style="margin-bottom:10px"><label>Notes</label><input id="ep-notes" value="'+esc(c.notes||'')+'"></div>'+
     '<div style="display:flex;gap:8px">'+
       '<button class="btn btn-p btn-sm" onclick="saveProfile('+cid+')">Save changes</button>'+
@@ -3042,6 +3099,7 @@ function saveProfile(cid){
   c.name=newName;
   c.phone=document.getElementById('ep-phone').value.trim();
   c.address=document.getElementById('ep-addr').value.trim();
+  c.pickupLoc=document.getElementById('ep-loc').value;
   c.notes=document.getElementById('ep-notes').value.trim();
   saveData();showProfile(cid);renderCustList();popCust();
   toast('Profile updated.');
@@ -3340,10 +3398,13 @@ function destroyChart(key){
 function getSummaryOrders(){
   var sv=document.getElementById('sum-status').value;
   var sd=document.getElementById('sum-date').value;
+  var sl=document.getElementById('sum-loc');
+  var slv=sl?sl.value:'all';
   var statuses=sv==='all'?['paid','unpaid','partial']:sv.split(',');
   return D.orders.filter(function(o){
     if(statuses.indexOf(o.status)<0) return false;
     if(sd&&o.date!==sd) return false;
+    if(slv&&slv!=='all'&&(o.loc||'')!==slv) return false;
     return true;
   }).sort(function(a,b){
     /* sort by customer name then date */
@@ -3443,6 +3504,16 @@ function renderSummary(){
   if(langSel) langSel.value=curLang;
   var langChip=document.getElementById('sum-lang-chip');
   if(langChip) langChip.textContent=curLang==='en'?'🌐 EN':'🌐 中文';
+  /* populate location filter + management chips (preserve current selection) */
+  var locSelEl=document.getElementById('sum-loc');
+  if(locSelEl){
+    var prevLocVal=locSelEl.value||'all';
+    locSelEl.innerHTML='<option value="all">All spots</option>'+pickupLocOptionsHtml();
+    var validVals=['all'].concat(getPickupLocs());
+    locSelEl.value=validVals.indexOf(prevLocVal)>=0?prevLocVal:'all';
+  }
+  var locChipsEl=document.getElementById('sum-loc-chips');
+  if(locChipsEl) locChipsEl.innerHTML=pickupLocChipsHtml();
   var isMob=window.innerWidth<=768;
   if(isMob){
     var today=new Date().toISOString().split('T')[0];
@@ -3491,7 +3562,7 @@ function renderSummary(){
   var mergedMap={};/* key: cid+'|'+date */
   ords.forEach(function(o){
     var key=o.cid+'|'+o.date;
-    if(!mergedMap[key]) mergedMap[key]={cid:o.cid,date:o.date,items:[],status:o.status,oids:[]};
+    if(!mergedMap[key]) mergedMap[key]={cid:o.cid,date:o.date,items:[],status:o.status,oids:[],loc:o.loc||''};
     mergedMap[key].oids.push(o.id);
     o.items.forEach(function(it,idx){
       /* dedup same stock item — add qty if already present, track oid+idx for collected */
@@ -3523,6 +3594,7 @@ function renderSummary(){
       '<th>Product</th>'+
       '<th class="num" style="width:96px">Unit price</th>'+
       '<th class="num" style="width:60px">Qty</th>'+
+      '<th style="width:130px;text-align:center">Pickup</th>'+
       '<th class="num" style="width:96px">Subtotal</th>'+
       '<th style="width:110px;text-align:center">Collected</th>'+
       '<th style="width:100px;text-align:center">Payment</th>'+
@@ -3562,6 +3634,7 @@ function renderSummary(){
           '<td>'+esc(p.name)+'</td>'+
           '<td class="num">'+sell.toFixed(2)+'</td>'+
           '<td class="num">'+parseFloat(it.q).toFixed(2)+'</td>'+
+          '<td></td>'+
           '<td class="num">'+sub.toFixed(2)+'</td>'+
           '<td style="text-align:center;padding:4px 6px">'+collectBtn+'</td>'+
           '<td style="text-align:center;padding:4px 6px">'+itemPayBadge+'</td>'+
@@ -3573,9 +3646,12 @@ function renderSummary(){
       ?'<button onclick="sumTogglePaid('+m.cid+',\''+m.date+'\')" style="padding:5px 12px;font-size:12px;font-weight:700;border:none;border-radius:6px;background:#16a34a;color:#fff;cursor:pointer">✓ Paid</button>'
       :'<button onclick="sumTogglePaid('+m.cid+',\''+m.date+'\')" style="padding:5px 12px;font-size:12px;font-weight:600;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#555;cursor:pointer">Mark paid</button>';
     var waBtn='<button onclick="sumShareImage('+m.cid+',\''+m.date+'\')" title="Share order image" style="padding:5px 12px;font-size:12px;font-weight:700;border:none;border-radius:6px;background:#1a3a2a;color:#fff;cursor:pointer;white-space:nowrap">📤 Share</button>';
+    var locSelHtml='<select onchange="sumSetLoc('+m.cid+',\''+m.date+'\',this.value)" style="font-size:11px;padding:3px 6px;width:118px">'+
+      '<option value=""'+(m.loc?'':' selected')+'>Not set</option>'+pickupLocOptionsHtml(m.loc)+'</select>';
     html+=
       '<tr class="subtotal-row" style="'+rowBg+'">'+ 
         '<td colspan="4" style="text-align:right;padding-right:14px;font-weight:700;color:#1a1a1a">'+esc(cname)+' total</td>'+
+        '<td style="text-align:center;padding:4px 6px">'+locSelHtml+'</td>'+
         '<td class="num" style="font-weight:700">'+blockTotal.toFixed(2)+'</td>'+
         '<td style="text-align:center;padding:6px 8px">'+tickBtn+'</td>'+
         '<td style="text-align:center;padding:4px 6px;white-space:nowrap">'+waBtn+'</td>'+
@@ -3585,6 +3661,7 @@ function renderSummary(){
   html+=
     '<tr class="total-row">'+
       '<td colspan="4" style="text-align:right;padding-right:14px">Grand Total</td>'+
+      '<td></td>'+
       '<td class="num">'+grandTotal.toFixed(2)+'</td>'+
       '<td></td>'+
       '<td></td>'+
@@ -3668,6 +3745,12 @@ function renderSummary(){
           '</div>'+
           '<div class="dcard-items">'+itemsHtml+'</div>'+
           progBar+
+          '<div style="padding:6px 14px;display:flex;align-items:center;gap:6px">'+
+            '<span style="font-size:11px;color:#888">Pickup:</span>'+
+            '<select onchange="sumSetLoc('+m.cid+',\''+m.date+'\',this.value)" style="font-size:11px;padding:2px 6px;flex:1">'+
+              '<option value=""'+(m.loc?'':' selected')+'>Not set</option>'+pickupLocOptionsHtml(m.loc)+
+            '</select>'+
+          '</div>'+
           '<div class="dcard-footer" style="display:flex;gap:8px;align-items:center">'+
             '<button class="'+payCls+'" id="dpaybtn-'+m.cid+'" data-cid="'+m.cid+'" data-date="'+m.date+'" style="flex:1">'+payTxt+'</button>'+
             '<button onclick="sumShareImage('+m.cid+',\''+m.date+'\')" title="Share order image" style="flex-shrink:0;width:40px;height:40px;border:1px solid #d1d5db;border-radius:8px;background:#fff;font-size:16px;cursor:pointer">📤</button>'+
@@ -3904,6 +3987,15 @@ function exportSummaryExcel(){
   }).catch(function(e){toast('Export failed: '+e.message);});
 }
 
+/* update the pickup location on every underlying order for this customer+date block */
+function sumSetLoc(cid,date,newLoc){
+  D.orders.forEach(function(o){
+    if(o.cid===cid&&o.date===date) o.loc=newLoc;
+  });
+  saveData();
+  toast(newLoc?('✓ Pickup set to '+newLoc):'Pickup location cleared');
+  renderSummary();
+}
 function sumTogglePaid(cid,date){
   var orders=D.orders.filter(function(o){return o.cid===cid&&o.date===date;});
   var allPaid=orders.every(function(o){return o.status==='paid';});
@@ -7067,7 +7159,7 @@ function ofImportAll(){
       var s=D.stock.find(function(x){return x.id===it.sid;});
       return s?{s:s.id,q:parseFloat(it.qty)||1,sp:s.sell,cp:s.cost}:null;
     }).filter(Boolean);
-    if(items.length){D.orders.push({id:D.nid++,cid:cid,date:date,items:items,status:'unpaid'});created++;}
+    if(items.length){D.orders.push({id:D.nid++,cid:cid,date:date,items:items,status:'unpaid',loc:(cp(cid)||{}).pickupLoc||''});created++;}
   });
 
   saveData();
