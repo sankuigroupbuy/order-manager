@@ -3862,22 +3862,22 @@ function exportSummaryExcel(){
   var wb=new ExcelJS.Workbook();
   wb.creator='Hills Sweets NMC';
 
-  /* ── style constants (approved design) ── */
-  var BRANDC='FF1A3A2A',CUST_BAND='FFCFE8B8',TOTAL_CHIP='FFE3EEDC',WHITEC='FFFFFFFF';
+  /* ── style constants (Palette C — cool professional) ── */
+  var BRANDC='FF042C53',CUST_BAND='FFE6F1FB',TOTAL_CHIP='FFEFF6FC',WHITEC='FFFFFFFF';
   var LOC_COLORS={
-    'Castle Towers':{bg:'FFE6F1FB',fg:'FF0C447C'},
-    'Epping':{bg:'FFFAEEDA',fg:'FF854F0B'}
+    'Castle Towers':{bg:'FFD9F2EC',fg:'FF0F6E56'},
+    'Epping':{bg:'FFFDEBD0',fg:'FF9A6324'}
   };
-  function locColorFor(loc){return LOC_COLORS[loc]||{bg:'FFF1EFE8',fg:'FF5F5E5A'};}
+  function locColorFor(loc){return LOC_COLORS[loc]||{bg:'FFEDEDED',fg:'FF5F5E5A'};}
   function paidBadgeFor(count,total){
-    if(count===total) return {label:'🟢 Paid',bg:'FFC0DD97',fg:'FF27500A'};
-    if(count===0) return {label:'🔴 Unpaid',bg:'FFF7C1C1',fg:'FF791F1F'};
-    return {label:'🟠 Partial '+count+'/'+total,bg:'FFFAC775',fg:'FF854F0B'};
+    if(count===total) return {label:'Paid',bg:'FFD6E4F0',fg:'FF1D4E89'};
+    if(count===0) return {label:'Unpaid',bg:'FFEDEDED',fg:'FF5F5E5A'};
+    return {label:'Partial '+count+'/'+total,bg:'FFFDEBD0',fg:'FF9A6324'};
   }
   function collBadgeFor(count,total){
-    if(count===total) return {label:'✅ Collected',bg:'FFC0DD97',fg:'FF27500A'};
-    if(count===0) return {label:'📦 Not collected',bg:'FFFAC775',fg:'FF854F0B'};
-    return {label:'📦 Partial '+count+'/'+total,bg:'FFFAC775',fg:'FF854F0B'};
+    if(count===total) return {label:'Collected',bg:'FFD6E4F0',fg:'FF1D4E89'};
+    if(count===0) return {label:'Not collected',bg:'FFEDEDED',fg:'FF5F5E5A'};
+    return {label:'Partial '+count+'/'+total,bg:'FFFDEBD0',fg:'FF9A6324'};
   }
 
   /* ── Sheet 1: Order Summary (approved report design) ── */
@@ -3956,9 +3956,9 @@ function exportSummaryExcel(){
       row.getCell(4).numFmt='"$"#,##0.00';row.getCell(4).font={size:12};
       row.getCell(5).numFmt='0.00';row.getCell(5).font={size:12};row.getCell(5).alignment={horizontal:'center'};
       row.getCell(6).numFmt='"$"#,##0.00';row.getCell(6).font={size:12};
-      row.getCell(7).font={bold:true,size:15,color:{argb:isPaid?'FF27500A':'FF791F1F'}};
+      row.getCell(7).font={bold:true,size:15,color:{argb:isPaid?'FF1D4E89':'FF5F5E5A'}};
       row.getCell(7).alignment={horizontal:'center'};
-      row.getCell(8).font={bold:true,size:15,color:{argb:isColl?'FF27500A':'FF854F0B'}};
+      row.getCell(8).font={bold:true,size:15,color:{argb:isColl?'FF1D4E89':'FF5F5E5A'}};
       row.getCell(8).alignment={horizontal:'center'};
       row.getCell(10).font={size:11,color:{argb:'FF888888'}};
       row.height=22;
