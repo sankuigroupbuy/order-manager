@@ -3883,19 +3883,19 @@ function exportSummaryExcel(){
   /* ── Sheet 1: Order Summary (approved report design) ── */
   var ws1=wb.addWorksheet('Order Summary',{views:[{state:'frozen',ySplit:3,showGridLines:false}]});
   ws1.columns=[
-    {width:4},{width:17},{width:34},{width:13},{width:7},
+    {width:17},{width:34},{width:13},{width:7},
     {width:13},{width:17},{width:18},{width:16},{width:13}
   ];
 
   var exportDateLabel=document.getElementById('sum-date').value||'All dates';
-  ws1.mergeCells('A1:F1');
+  ws1.mergeCells('A1:E1');
   var titleCell=ws1.getCell('A1');
   titleCell.value='山區團購優惠組   Order Summary';
   titleCell.font={bold:true,size:22,color:{argb:WHITEC}};
   titleCell.fill={type:'pattern',pattern:'solid',fgColor:{argb:BRANDC}};
   titleCell.alignment={vertical:'middle',indent:1};
-  ws1.mergeCells('G1:J1');
-  var dateCell=ws1.getCell('G1');
+  ws1.mergeCells('F1:I1');
+  var dateCell=ws1.getCell('F1');
   dateCell.value='📅  '+exportDateLabel;
   dateCell.font={bold:true,size:14,color:{argb:WHITEC}};
   dateCell.fill={type:'pattern',pattern:'solid',fgColor:{argb:BRANDC}};
@@ -3904,7 +3904,7 @@ function exportSummaryExcel(){
 
   ws1.addRow([]);ws1.getRow(2).height=6;
 
-  var HDR=['#','Order by','Product','Unit price (A$)','Qty','Subtotal (A$)','Paid','Collected','Pickup','Order date'];
+  var HDR=['Order by','Product','Unit price (A$)','Qty','Subtotal (A$)','Paid','Collected','Pickup','Order date'];
   var hdrRow=ws1.addRow(HDR);
   hdrRow.eachCell(function(cell){
     cell.font={bold:true,size:13,color:{argb:WHITEC}};
@@ -3924,22 +3924,19 @@ function exportSummaryExcel(){
     var lc=locColorFor(m.loc);
 
     /* customer header row */
-    var custRow=ws1.addRow([bi+1,cname,'','','','',paidBadge.label,collBadge.label,(m.loc?('📍 '+m.loc):'Not set'),'']);
+    var custRow=ws1.addRow([cname,'','','','',paidBadge.label,collBadge.label,(m.loc?('📍 '+m.loc):'Not set'),'']);
     custRow.eachCell(function(cell){cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:CUST_BAND}};});
-    custRow.getCell(1).font={bold:true,size:13,color:{argb:WHITEC}};
-    custRow.getCell(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:BRANDC}};
-    custRow.getCell(1).alignment={horizontal:'center',vertical:'middle'};
-    custRow.getCell(2).font={bold:true,size:15,color:{argb:'FF1A3A2A'}};
-    custRow.getCell(2).alignment={vertical:'middle'};
-    custRow.getCell(7).font={bold:true,size:12,color:{argb:paidBadge.fg}};
-    custRow.getCell(7).fill={type:'pattern',pattern:'solid',fgColor:{argb:paidBadge.bg}};
+    custRow.getCell(1).font={bold:true,size:15,color:{argb:'FF1A3A2A'}};
+    custRow.getCell(1).alignment={vertical:'middle'};
+    custRow.getCell(6).font={bold:true,size:12,color:{argb:paidBadge.fg}};
+    custRow.getCell(6).fill={type:'pattern',pattern:'solid',fgColor:{argb:paidBadge.bg}};
+    custRow.getCell(6).alignment={horizontal:'center',vertical:'middle'};
+    custRow.getCell(7).font={bold:true,size:12,color:{argb:collBadge.fg}};
+    custRow.getCell(7).fill={type:'pattern',pattern:'solid',fgColor:{argb:collBadge.bg}};
     custRow.getCell(7).alignment={horizontal:'center',vertical:'middle'};
-    custRow.getCell(8).font={bold:true,size:12,color:{argb:collBadge.fg}};
-    custRow.getCell(8).fill={type:'pattern',pattern:'solid',fgColor:{argb:collBadge.bg}};
+    custRow.getCell(8).font={bold:true,size:13,color:{argb:lc.fg}};
+    custRow.getCell(8).fill={type:'pattern',pattern:'solid',fgColor:{argb:lc.bg}};
     custRow.getCell(8).alignment={horizontal:'center',vertical:'middle'};
-    custRow.getCell(9).font={bold:true,size:13,color:{argb:lc.fg}};
-    custRow.getCell(9).fill={type:'pattern',pattern:'solid',fgColor:{argb:lc.bg}};
-    custRow.getCell(9).alignment={horizontal:'center',vertical:'middle'};
     custRow.height=30;
 
     /* item rows */
@@ -3950,18 +3947,18 @@ function exportSummaryExcel(){
       blockTotal+=sub;
       var isPaid=it.itemStatus==='paid';
       var isColl=!!it.collected;
-      var row=ws1.addRow(['','',p.name,parseFloat(sell.toFixed(2)),parseFloat(it.q.toFixed(2)),sub,
+      var row=ws1.addRow(['',p.name,parseFloat(sell.toFixed(2)),parseFloat(it.q.toFixed(2)),sub,
         isPaid?'✓':'✗',isColl?'✓':'✗','',m.date]);
-      row.getCell(3).font={size:12};
-      row.getCell(4).numFmt='"$"#,##0.00';row.getCell(4).font={size:12};
-      row.getCell(5).numFmt='0.00';row.getCell(5).font={size:12};row.getCell(5).alignment={horizontal:'center'};
-      row.getCell(6).numFmt='"$"#,##0.00';row.getCell(6).font={size:12};
-      row.getCell(7).font={bold:true,size:15,color:{argb:isPaid?'FF1D4E89':'FF5F5E5A'}};
+      row.getCell(2).font={size:15};
+      row.getCell(3).numFmt='"$"#,##0.00';row.getCell(3).font={size:15};
+      row.getCell(4).numFmt='0.00';row.getCell(4).font={size:15};row.getCell(4).alignment={horizontal:'center'};
+      row.getCell(5).numFmt='"$"#,##0.00';row.getCell(5).font={size:15};
+      row.getCell(6).font={bold:true,size:15,color:{argb:isPaid?'FF1D4E89':'FF5F5E5A'}};
+      row.getCell(6).alignment={horizontal:'center'};
+      row.getCell(7).font={bold:true,size:15,color:{argb:isColl?'FF1D4E89':'FF5F5E5A'}};
       row.getCell(7).alignment={horizontal:'center'};
-      row.getCell(8).font={bold:true,size:15,color:{argb:isColl?'FF1D4E89':'FF5F5E5A'}};
-      row.getCell(8).alignment={horizontal:'center'};
-      row.getCell(10).font={size:11,color:{argb:'FF888888'}};
-      row.height=22;
+      row.getCell(9).font={size:11,color:{argb:'FF888888'}};
+      row.height=24;
 
       /* accumulate sheet 2 */
       if(!prodMap[it.s]) prodMap[it.s]={name:p.name,qty:0,revenue:0,cat:p.cat||'Others'};
@@ -3972,25 +3969,25 @@ function exportSummaryExcel(){
     grandTotal+=blockTotal;
 
     /* customer total row — bold chip-style subtotal */
-    var totalRow=ws1.addRow(['',cname+' Total','','','',parseFloat(blockTotal.toFixed(2)),'','','','']);
+    var totalRow=ws1.addRow([cname+' Total','','','',parseFloat(blockTotal.toFixed(2)),'','','','']);
     totalRow.eachCell(function(cell){cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:CUST_BAND}};});
-    totalRow.getCell(2).font={bold:true,size:13,color:{argb:'FF1A3A2A'}};
-    totalRow.getCell(6).font={bold:true,size:15,color:{argb:'FF1A3A2A'}};
-    totalRow.getCell(6).fill={type:'pattern',pattern:'solid',fgColor:{argb:TOTAL_CHIP}};
-    totalRow.getCell(6).numFmt='"$"#,##0.00';
-    totalRow.getCell(6).alignment={horizontal:'center'};
+    totalRow.getCell(1).font={bold:true,size:13,color:{argb:'FF1A3A2A'}};
+    totalRow.getCell(5).font={bold:true,size:15,color:{argb:'FF1A3A2A'}};
+    totalRow.getCell(5).fill={type:'pattern',pattern:'solid',fgColor:{argb:TOTAL_CHIP}};
+    totalRow.getCell(5).numFmt='"$"#,##0.00';
+    totalRow.getCell(5).alignment={horizontal:'center'};
     totalRow.height=24;
 
     ws1.addRow([]).height=6;
   });
 
   ws1.addRow([]);
-  var grandRow=ws1.addRow(['','GRAND TOTAL','','','',parseFloat(grandTotal.toFixed(2)),'','','','']);
+  var grandRow=ws1.addRow(['GRAND TOTAL','','','',parseFloat(grandTotal.toFixed(2)),'','','','']);
   grandRow.eachCell(function(cell){cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:BRANDC}};});
-  grandRow.getCell(2).font={bold:true,size:16,color:{argb:WHITEC}};
-  grandRow.getCell(6).font={bold:true,size:18,color:{argb:WHITEC}};
-  grandRow.getCell(6).numFmt='"$"#,##0.00';
-  grandRow.getCell(6).alignment={horizontal:'center'};
+  grandRow.getCell(1).font={bold:true,size:16,color:{argb:WHITEC}};
+  grandRow.getCell(5).font={bold:true,size:18,color:{argb:WHITEC}};
+  grandRow.getCell(5).numFmt='"$"#,##0.00';
+  grandRow.getCell(5).alignment={horizontal:'center'};
   grandRow.height=32;
 
   /* ── Sheet 2: Products by Qty (unchanged) ── */
