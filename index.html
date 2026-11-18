@@ -4865,7 +4865,15 @@ function renderDeliveryBoard(){
     if(!seen[d]){seen[d]=true;dates.push(d);}
   });
 
-  var html='<div class="dv-board"><div class="dv-cols">';
+  /* the board only plans — orders keep their own date until the moves are applied */
+  var pendingMoves=run.entries.filter(function(e){return e.scheduledDate&&e.scheduledDate!==run.date;}).length;
+  var html=pendingMoves
+    ?'<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:10px 14px;margin-bottom:12px">'+
+        '<span style="font-size:13px;color:#92400e;flex:1;min-width:220px"><strong>'+pendingMoves+' customer'+(pendingMoves>1?'s':'')+' moved on the board.</strong> Their orders still carry '+run.date+' until you apply the moves.</span>'+
+        '<button class="btn btn-p btn-sm" onclick="applyBoardDates('+run.id+')">Apply moves to orders</button>'+
+      '</div>'
+    :'';
+  html+='<div class="dv-board"><div class="dv-cols">';
 
   dates.forEach(function(date){
     var isRunDay=date===run.date;
@@ -4970,6 +4978,32 @@ function renderDeliveryBoard(){
       dragCid=null;dragRid=null;
     });
   });
+}
+
+/* write the board's planned dates onto the real orders, so Order Summary, receipts and reports follow */
+function applyBoardDates(runId){
+  var run=D.runs.find(function(r){return r.id===runId;});
+  if(!run) return;
+  var moves=run.entries.filter(function(e){return e.scheduledDate&&e.scheduledDate!==run.date;});
+  if(!moves.length){toast('No moves to apply.');return;}
+  var plan=moves.map(function(e){
+    var n=D.orders.filter(function(o){return o.cid===e.cid&&o.date===run.date;}).length;
+    return {e:e,n:n};
+  });
+  var totalOrders=plan.reduce(function(a,x){return a+x.n;},0);
+  if(!confirm('Change the date on '+totalOrders+' order'+(totalOrders!==1?'s':'')+' for '+moves.length+' customer'+(moves.length!==1?'s':'')+'?\n\nOrders move from '+run.date+' to the dates shown on the board. They will then leave this run.')) return;
+  plan.forEach(function(x){
+    D.orders.forEach(function(o){
+      if(o.cid===x.e.cid&&o.date===run.date) o.date=x.e.scheduledDate;
+    });
+  });
+  var movedCids=moves.map(function(e){return e.cid;});
+  run.entries=run.entries.filter(function(e){return movedCids.indexOf(e.cid)<0;});
+  saveData();
+  renderRunSelector();
+  renderDeliveryBoard();
+  renderSummary();
+  toast('\u2713 '+totalOrders+' order'+(totalOrders!==1?'s':'')+' re-dated');
 }
 
 function setBoardSt(runId,cid,status){
@@ -6049,6 +6083,21 @@ var OF={
   pubFileId:null
 };
 
+/* ── admin secret: authorises admin-only Apps Script actions.
+   Never written in this file; entered once and kept in this browser only ── */
+function omAdminSecret(){
+  var s=localStorage.getItem('om_admin_secret')||'';
+  if(!s){
+    s=(prompt('Enter your admin secret (the ADMIN_SECRET value in Apps Script > Project Settings > Script properties).\nIt is stored only in this browser.')||'').trim();
+    if(s) localStorage.setItem('om_admin_secret',s);
+  }
+  return s;
+}
+function omAuthFail(){
+  localStorage.removeItem('om_admin_secret');
+  toast('Admin secret rejected \u2014 you will be asked again next time.');
+}
+
 /* ── storage helpers ── */
 function ofSave(key,val){try{localStorage.setItem(key,JSON.stringify(val));}catch(e){toast('Storage full — try removing large photos');}}
 function ofRead(key){try{var v=localStorage.getItem(key);return v?JSON.parse(v):null;}catch(e){return null;}}
@@ -6174,7 +6223,7 @@ function ofUploadPhoto(evt,stockId){
       fetch(OF.SCRIPT_URL,{
         method:'POST',
         body:JSON.stringify({
-          key:SC_API_KEY,action:'uploadphoto',
+          adminSecret:omAdminSecret(),action:'uploadphoto',
           photoBase64:dataUrl,
           filename:'of-'+stockId+'-'+Date.now()+'.jpg'
         })
@@ -6185,6 +6234,7 @@ function ofUploadPhoto(evt,stockId){
             ofSaveDraft();ofRenderPicker();
             toast('\u2713 Photo saved for '+esc(stockName));
           } else {
+            if(res&&res.message==='Unauthorised') omAuthFail();
             toast('\u26a0 Upload failed');
           }
         })
@@ -6455,7 +6505,7 @@ function isHeavyPhoto(p){
    uploader and stores the returned URL instead of a giant base64
    text blob (this is the fix for both storage-full errors and the
    slow-loading public menu page) */
-var SC_API_KEY='hills-hgb-2026';
+
 function scUploadPhoto(evt,itemId){
   var files=Array.prototype.slice.call(evt.target.files||[]);
   if(!files.length) return;
@@ -6479,7 +6529,7 @@ function scUploadPhoto(evt,itemId){
         fetch(OF.SCRIPT_URL,{
           method:'POST',
           body:JSON.stringify({
-            key:SC_API_KEY,action:'uploadphoto',
+            adminSecret:omAdminSecret(),action:'uploadphoto',
             photoBase64:dataUrl,
             filename:'sc-'+itemId+'-'+Date.now()+'.jpg'
           })
@@ -6487,7 +6537,7 @@ function scUploadPhoto(evt,itemId){
           .then(function(res){
             done++;
             if(res&&res.status==='ok'&&res.url){ it.photos.push(res.url); }
-            else { failed++; lastErr=(res&&res.message)||'server returned no URL'; console.error('Photo upload failed:',res); }
+            else { failed++; lastErr=(res&&res.message)||'server returned no URL'; if(res&&res.message==='Unauthorised') omAuthFail(); console.error('Photo upload failed:',res); }
             if(done===total) finishScUpload();
           })
           .catch(function(err){
@@ -7013,9 +7063,10 @@ function ofRefreshPending(){
   var list=document.getElementById('of-pend-list');
   if(list) list.innerHTML='<div class="empty" style="color:#888">Loading orders...</div>';
 
-  fetch(OF.SCRIPT_URL+'?action=getorders')
+  fetch(OF.SCRIPT_URL+'?action=getorders&secret='+encodeURIComponent(omAdminSecret()))
     .then(function(r){return r.json();})
     .then(function(resp){
+      if(resp&&resp.status==='error'&&resp.message==='Unauthorised') omAuthFail();
       if(resp.status==='ok'&&resp.orders&&resp.orders.length){
         /* use sheetRow as unique key — rebuild pending from sheet every time */
         var existing=ofRead(OF.PEND_KEY)||[];
@@ -7235,7 +7286,7 @@ function ofImportAll(){
   /* mark rows as imported in Google Sheet */
   var sheetRows=pending.filter(function(po){return po.sheetRow;}).map(function(po){return po.sheetRow;});
   if(sheetRows.length&&OF.SCRIPT_URL){
-    fetch(OF.SCRIPT_URL+'?action=markimported&rows='+sheetRows.join(','))
+    fetch(OF.SCRIPT_URL+'?action=markimported&secret='+encodeURIComponent(omAdminSecret())+'&rows='+sheetRows.join(','))
       .catch(function(){}); /* fire and forget */
   }
 
